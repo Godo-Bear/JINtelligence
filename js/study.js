@@ -25,10 +25,10 @@ function chatPanel(host, { log, placeholder, empty, ideas = [], onSend, onChange
   host.innerHTML = `
     <div class="chat study-chat" data-chat></div>
     <form class="chat-form" autocomplete="off">
-      <input type="text" placeholder="${esc(placeholder)}" aria-label="Message the AI" maxlength="2000">
+      <textarea class="chat-input" rows="1" placeholder="${esc(placeholder)}" aria-label="Message the AI" maxlength="2000"></textarea>
       <button class="btn" type="submit">Send</button>
     </form>`;
-  const box = $("[data-chat]", host), form = $("form", host), input = $("input", form), btn = $("button", form);
+  const box = $("[data-chat]", host), form = $("form", host), input = $("textarea", form), btn = $("button", form);
   let busy = false;
   const draw = () => {
     if (!log.length) {
@@ -756,7 +756,7 @@ function infoMode(view, host) {
     });
   }
   function pick(e) { page = state.pages.find((p) => p.id === e.target.value) || page; save(); draw(); }
-  function blank() { page = null; save(); draw(); $("#in-chat input", host)?.focus(); }
+  function blank() { page = null; save(); draw(); $("#in-chat textarea", host)?.focus(); }
 
   const chat = chatPanel($("#in-chat", host), {
     log: state.chat,

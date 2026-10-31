@@ -1978,7 +1978,7 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
         <summary>💬 Chat with the AI about your ${kind}</summary>
         <div class="chat" id="w-chat" style="min-height:120px; margin-top:10px;"></div>
         <form class="chat-form" id="w-chat-form" autocomplete="off">
-          <input type="text" id="w-chat-input" placeholder="Ask about your ${kind}…">
+          <textarea class="chat-input" rows="1" id="w-chat-input" placeholder="Ask about your ${kind}…"></textarea>
           <button class="btn" type="submit" id="w-chat-send">Send</button>
         </form>
         ${piece.chat.length ? `<button class="btn ghost sm" id="w-chat-clear" style="margin-top:6px;">Clear chat</button>` : ""}
@@ -2557,6 +2557,18 @@ function runTest(view, items, minutes, opts = {}) {
   }
 }
 
+// Chat boxes: Enter sends, Shift+Enter starts a new line, and the box grows with the message.
+function fitChatInput(el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 160) + "px"; }
+document.addEventListener("keydown", (e) => {
+  const el = e.target;
+  if (!el.matches?.("textarea.chat-input") || e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+  e.preventDefault();
+  el.form?.requestSubmit();
+});
+document.addEventListener("input", (e) => { if (e.target.matches?.("textarea.chat-input")) fitChatInput(e.target); });
+// Shrink the box back after a message is sent (the value is cleared in code, which fires no input event).
+document.addEventListener("submit", (e) => { const el = e.target.querySelector?.("textarea.chat-input"); if (el) setTimeout(() => fitChatInput(el), 0); });
+
 // ---------------- Tutor ----------------
 // Chats are saved (js/ai-memory.js), so the tutor sees the earlier messages in a chat, you can go back to
 // old chats, and it remembers short notes about you across all chats.
@@ -2605,7 +2617,7 @@ function pageTutor(view) {
         <form class="chat-form" id="chat-form" autocomplete="off">
           <button type="button" class="btn secondary" id="photo" title="Add a photo of your working">📷</button>
           <input type="file" id="photo-input" accept="image/*" class="hidden">
-          <input type="text" id="ask" placeholder="Ask a question…" maxlength="4000">
+          <textarea class="chat-input" rows="1" id="ask" placeholder="Ask a question…" maxlength="4000"></textarea>
           <button class="btn" type="submit" id="send">Ask</button>
         </form>
       </div>

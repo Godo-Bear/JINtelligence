@@ -304,7 +304,9 @@ details[open] summary { margin-bottom: 4px; }
 .chat-empty .chips .btn { white-space: normal; max-width: 100%; }
 .chat-empty .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
 .chat-form { display: flex; gap: 8px; margin-top: 14px; }
-.chat-form input[type="text"] { flex: 1; }
+.chat-form input[type="text"], .chat-form textarea.chat-input { flex: 1; }
+.chat-form { align-items: flex-end; }
+textarea.chat-input { min-height: 0; height: 44px; max-height: 160px; resize: none; line-height: 1.4; overflow-y: auto; }
 .attach-preview { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; }
 .attach-preview img { height: 48px; border-radius: 6px; }
 
