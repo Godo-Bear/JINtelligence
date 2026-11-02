@@ -85,7 +85,7 @@ function takePendingAction(mode) {
 }
 
 // ---------------------------------------------------------------- AI test
-const aiTest = { log: [], draft: [], minutes: 20, types: [], files: [] };
+const aiTest = { log: [], draft: [], minutes: 20, types: [], files: [], savedId: null, name: "", marked: [] };
 const studyFiles = { cards: [], info: [] }; // files added to the flashcards and info chats (kept for this visit) // kept for this visit to the site
 const AI_TEST_TYPES = {
   short: "Short answer", mc: "Multiple choice", tf: "True or false", blank: "Fill in the blank", worded: "Worded problems",
@@ -118,10 +118,15 @@ function loadAITest() {
   aiTest.draft = Array.isArray(saved.draft) ? saved.draft : [];
   aiTest.minutes = Number.isFinite(saved.minutes) ? saved.minutes : 20;
   aiTest.types = Array.isArray(saved.types) ? saved.types : [];
+  aiTest.savedId = saved.savedId || null;
+  aiTest.name = saved.name || "";
+  aiTest.marked = Array.isArray(saved.marked) ? saved.marked.filter((i) => i < aiTest.draft.length) : [];
 }
 function saveAITest() {
   if (aiTestOwner !== authUser?.id) return;
-  store(aiTestKey(), { log: aiTest.log.filter((m) => !m.pending).slice(-40), draft: aiTest.draft, minutes: aiTest.minutes, types: aiTest.types });
+  store(aiTestKey(), { log: aiTest.log.filter((m) => !m.pending).slice(-40), draft: aiTest.draft, minutes: aiTest.minutes, types: aiTest.types, savedId: aiTest.savedId, name: aiTest.name, marked: aiTest.marked });
+  // Once a test has been saved, keep its saved copy up to date.
+  if (aiTest.savedId && aiTest.draft.length) saveTest({ id: aiTest.savedId, name: aiTest.name, questions: aiTest.draft, minutes: aiTest.minutes, marked: aiTest.marked });
 }
 
 function aiTestMode(view, host) {
@@ -183,9 +188,15 @@ ${memoryRules()}`, aiTest.files,
       const data = parseLooseJSON(raw);
       const obj = data && !Array.isArray(data) ? data : {};
       const before = aiTest.draft.length;
-      if (obj.clear === true) aiTest.draft = [];
+      if (obj.clear === true) { aiTest.draft = []; aiTest.marked = []; }
       const rm = new Set((Array.isArray(obj.remove) ? obj.remove : []).map(Number).filter((n) => n >= 1));
-      if (rm.size) aiTest.draft = aiTest.draft.filter((_, i) => !rm.has(i + 1));
+      if (rm.size) {
+        // Keep highlights on the right questions after some are removed.
+        const keep = aiTest.draft.map((_, i) => !rm.has(i + 1));
+        const newIndex = []; let n = 0; keep.forEach((k, i) => { newIndex[i] = k ? n++ : -1; });
+        aiTest.marked = aiTest.marked.map((i) => newIndex[i]).filter((i) => i >= 0);
+        aiTest.draft = aiTest.draft.filter((_, i) => keep[i]);
+      }
       const removed = before - aiTest.draft.length;
       const list = Array.isArray(data) ? data : obj.add || obj.questions || [];
       const added = normaliseAIQuestions(list, 15).slice(0, Math.max(0, 50 - aiTest.draft.length));
@@ -200,47 +211,104 @@ ${memoryRules()}`, aiTest.files,
     const d = $("#tc-draft", host);
     saveAITest();
     if (!d) return;
-    const qs = aiTest.draft;
+    const qs = aiTest.draft, marked = new Set(aiTest.marked);
+    const savedCount = loadSavedTests().tests.length;
     d.innerHTML = `
-      <div class="row between"><h3 style="margin:0;">📝 Your test <span class="muted small">· ${qs.length} question${qs.length === 1 ? "" : "s"}</span></h3>
-        ${qs.length ? `<button class="btn ghost sm" id="tc-clear">Clear all</button>` : ""}</div>
+      <div class="row between test-head">
+        <h3 style="margin:0;">📝 ${esc(aiTest.name || "Your test")} <span class="muted small">· ${qs.length} question${qs.length === 1 ? "" : "s"}${aiTest.savedId ? " · ✓ saved" : ""}</span></h3>
+        <div class="row test-tools">
+          <button class="btn secondary sm" type="button" id="tc-save"${qs.length ? "" : " disabled"}>💾 ${aiTest.savedId ? "Rename" : "Save test"}</button>
+          <button class="btn secondary sm" type="button" id="tc-new">＋ New test</button>
+          <button class="btn ghost sm" type="button" id="tc-mine">📂 My tests${savedCount ? ` (${savedCount})` : ""}</button>
+          <button class="btn ghost sm" type="button" id="tc-pdf"${qs.length ? "" : " disabled"}>🖨️ Save as PDF</button>
+        </div>
+      </div>
       ${qs.length
-        ? `<ol class="draft-list">${qs.map((q, i) => `<li><span class="draft-ico" title="${esc(questionKind(q))}">${questionIcon(q)}</span>
+        ? `<p class="muted small" style="margin:0;">Tap ⭐ to highlight a question to work on, or 🤖 to go through it with the AI tutor.</p>
+          <ol class="draft-list">${qs.map((q, i) => `<li class="${marked.has(i) ? "marked" : ""}"><span class="draft-ico" title="${esc(questionKind(q))}">${questionIcon(q)}</span>
             <span class="draft-q">${esc(q.prompt)}<small>${esc(q.topicName || "")} · ${esc(questionKind(q))}</small></span>
-            <button class="btn ghost sm draft-x" type="button" data-x="${i}" aria-label="Remove question ${i + 1}">✕</button></li>`).join("")}</ol>`
+            <span class="draft-btns">
+              <button class="btn ghost sm draft-star${marked.has(i) ? " on" : ""}" type="button" data-star="${i}" aria-pressed="${marked.has(i)}" title="${marked.has(i) ? "Remove highlight" : "Highlight to work on"}">${marked.has(i) ? "⭐" : "☆"}</button>
+              <button class="btn ghost sm" type="button" data-ask="${i}" title="Ask the AI tutor about this question" aria-label="Ask the AI about question ${i + 1}">🤖</button>
+              <button class="btn ghost sm draft-x" type="button" data-x="${i}" aria-label="Remove question ${i + 1}">✕</button>
+            </span></li>`).join("")}</ol>`
         : `<p class="muted small" style="margin:0;">No questions yet. Ask the AI for some — e.g. “Give me 10 questions on fractions”.</p>`}
       <div class="draft-start">
         <div><label class="field" for="tc-time">Time limit</label><select id="tc-time">${timeOptions(aiTest.minutes)}</select></div>
         <button class="btn secondary" id="tc-share" type="button"${qs.length ? "" : " disabled"}>🌍 Share</button>
+        ${marked.size ? `<button class="btn secondary" id="tc-start-marked" type="button">Do the ⭐ ${marked.size}</button>` : ""}
         <button class="btn" id="tc-start" type="button"${qs.length ? "" : " disabled"}>Start test →</button>
       </div>
-      ${aiTest.log.length || qs.length ? `<button class="btn ghost sm" id="tc-reset" type="button" style="justify-self:start;">Start over (clear the chat and test)</button>` : ""}`;
-    $$("[data-x]", d).forEach((b) => b.addEventListener("click", () => { aiTest.draft.splice(+b.dataset.x, 1); drawDraft(); }));
-    $("#tc-clear", d)?.addEventListener("click", () => { if (confirm("Remove all the questions from this test?")) { aiTest.draft = []; drawDraft(); } });
+      ${qs.length ? `<button class="btn ghost sm" id="tc-clear" type="button" style="justify-self:start;">Remove all questions</button>` : ""}`;
+
+    const name = () => aiTest.name || testName(aiTest.draft);
+    $$("[data-x]", d).forEach((b) => b.addEventListener("click", () => {
+      const x = +b.dataset.x;
+      aiTest.draft.splice(x, 1);
+      aiTest.marked = aiTest.marked.filter((i) => i !== x).map((i) => (i > x ? i - 1 : i));
+      drawDraft();
+    }));
+    $$("[data-star]", d).forEach((b) => b.addEventListener("click", () => {
+      const i = +b.dataset.star;
+      aiTest.marked = aiTest.marked.includes(i) ? aiTest.marked.filter((m) => m !== i) : [...aiTest.marked, i].sort((a, c) => a - c);
+      drawDraft();
+    }));
+    $$("[data-ask]", d).forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.ask; askTutorAbout(aiTest.draft[i], i + 1); }));
+    $("#tc-clear", d)?.addEventListener("click", () => { if (confirm("Remove all the questions from this test?")) { aiTest.draft = []; aiTest.marked = []; drawDraft(); } });
     $("#tc-time", d).addEventListener("change", (e) => { aiTest.minutes = +e.target.value; saveAITest(); });
-    $("#tc-share", d).addEventListener("click", () => openShareTest(aiTest.draft.map((q) => ({ q, topic: { id: null, name: q.topicName } })), { minutes: aiTest.minutes, title: aiTest.draft[0]?.topicName || "" }));
-    $("#tc-reset", d)?.addEventListener("click", () => {
-      if (!confirm("Clear the chat and the test, and start again?")) return;
+    $("#tc-save", d).addEventListener("click", () => {
+      const n = prompt(aiTest.savedId ? "Rename this test:" : "Name this test so you can find it in 📂 My tests:", name());
+      if (n === null) return;
+      aiTest.name = n.trim().slice(0, 80) || name();
+      const t = saveTest({ id: aiTest.savedId, name: aiTest.name, questions: aiTest.draft, minutes: aiTest.minutes, marked: aiTest.marked });
+      aiTest.savedId = t.id;
+      toast(`💾 Saved "${t.name}" — find it in 📂 My tests.`);
+      drawDraft();
+    });
+    // A new test keeps the current one: it's saved to My tests first, then everything starts fresh.
+    $("#tc-new", d).addEventListener("click", () => {
+      if (aiTest.draft.length) {
+        const t = saveTest({ id: aiTest.savedId, name: name(), questions: aiTest.draft, minutes: aiTest.minutes, marked: aiTest.marked });
+        toast(`💾 "${t.name}" is saved in 📂 My tests. Here's a fresh test.`);
+      }
       aiTest.log.length = 0;
-      aiTest.draft = [];
+      Object.assign(aiTest, { draft: [], savedId: null, name: "", marked: [] });
+      saveAITest();
       aiTestMode(view, host);
     });
-    $("#tc-start", d).addEventListener("click", () => {
-      if (!aiTest.draft.length) return;
+    $("#tc-mine", d).addEventListener("click", () => openMyTests((t) => {
+      // Keep whatever's open now before switching.
+      if (aiTest.draft.length && aiTest.savedId !== t.id) saveTest({ id: aiTest.savedId, name: name(), questions: aiTest.draft, minutes: aiTest.minutes, marked: aiTest.marked });
+      aiTest.log.length = 0;
+      Object.assign(aiTest, { draft: t.questions.slice(), savedId: t.id, name: t.name, marked: (t.marked || []).slice(), minutes: t.minutes || 20 });
+      saveAITest();
+      aiTestMode(view, host);
+      toast(`📂 Opened "${t.name}".`);
+    }));
+    $("#tc-pdf", d).addEventListener("click", () => printTestDialog(name(), aiTest.draft, aiTest.marked));
+    $("#tc-share", d).addEventListener("click", () => openShareTest(aiTest.draft.map((q) => ({ q, topic: { id: null, name: q.topicName } })), { minutes: aiTest.minutes, title: aiTest.draft[0]?.topicName || "" }));
+    const start = (list) => {
+      if (!list.length) return;
       let last = "";
-      const qs2 = aiTest.draft.map((q) => {
+      const qs2 = list.map((q) => {
         const copy = { ...q, showPassage: !!q.passage && q.passage !== last };
         last = q.passage || "";
         return copy;
       });
       runTest(view, qs2.map((q) => ({ q, topic: { id: null, name: q.topicName, icon: "🤖" } })), aiTest.minutes);
-    });
+    };
+    $("#tc-start", d).addEventListener("click", () => start(aiTest.draft));
+    $("#tc-start-marked", d)?.addEventListener("click", () => start(aiTest.draft.filter((_, i) => aiTest.marked.includes(i))));
   }
   drawDraft();
 
   const action = takePendingAction("chat");
   if (action) {
-    if (action.fresh) { aiTest.draft = []; drawDraft(); }
+    if (action.fresh) {
+      if (aiTest.draft.length) saveTest({ id: aiTest.savedId, name: aiTest.name || testName(aiTest.draft), questions: aiTest.draft, minutes: aiTest.minutes, marked: aiTest.marked });
+      Object.assign(aiTest, { draft: [], marked: [], savedId: null, name: "" });
+      drawDraft();
+    }
     chat.send(action.text, action.hidden);
   }
 }
@@ -265,7 +333,7 @@ function pushDecks(state) {
     try {
       const { error } = await sb.from("flashcards").upsert({
         user_id: authUser.id, updated_at: new Date().toISOString(),
-        data: { decks: state.decks.filter((d) => !isBlankDeck(d)), deleted: state.deleted.slice(-200) },
+        data: { decks: state.decks.filter((d) => !isBlankDeck(d)), deleted: state.deleted.slice(-200), tests: loadSavedTests().tests, testsDeleted: loadSavedTests().deleted.slice(-200) },
       });
       if (error) throw error;
     } catch (e) { cloudDecks = false; console.warn("Apex: flashcards table unavailable, saving on this device only —", e.message || e); }

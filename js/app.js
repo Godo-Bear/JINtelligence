@@ -1180,10 +1180,12 @@ function markQuestion(row, q, correct, { yourAnswer, feedback } = {}) {
     <div class="q-tools">
       ${q.explanation ? `<button type="button" class="btn ghost sm" data-act="explain">Explanation</button>` : ""}
       <button type="button" class="btn ghost sm" data-act="steps">Step-by-step (AI)</button>
+      <button type="button" class="btn ghost sm" data-ask-ai>🤖 Ask the AI</button>
     </div>
     <div class="explain hidden" data-box="explain">${esc(q.explanation)}</div>
     <div class="explain hidden" data-box="steps"></div>`;
 
+  $("[data-ask-ai]", fb).addEventListener("click", () => askTutorAbout(q));
   $$("[data-act]", fb).forEach((btn) => btn.addEventListener("click", async () => {
     const box = $(`[data-box="${btn.dataset.act}"]`, fb);
     box.classList.toggle("hidden");
@@ -2543,7 +2545,10 @@ function runTest(view, items, minutes, opts = {}) {
         ${items.map(({ q, topic }, i) => questionHTML(q, i, topic.name, shown[i])).join("")}
       </div>
       <div class="row" style="margin-top:16px;"><a class="btn" href="#/test" id="again">${esc(opts.again || "Build another test")}</a>
-        ${opts.noPoints || opts.publicId ? "" : `<button class="btn secondary" type="button" id="share-test">🌍 Share this test</button>`}</div>`;
+        ${opts.noPoints || opts.publicId ? "" : `<button class="btn secondary" type="button" id="share-test">🌍 Share this test</button>`}
+        <button class="btn secondary" type="button" id="save-test">💾 Save test</button>
+        <button class="btn ghost" type="button" id="pdf-test">🖨️ Save as PDF</button></div>
+      <p class="muted small" style="margin:8px 0 0;">Saving keeps the questions in 📂 My tests (on the AI test tab), with the ones you got wrong ⭐ highlighted to work on.</p>`;
 
     items.forEach(({ q }, i) => {
       const row = $(`.question[data-qid="${q.id}"]`, view);
@@ -2553,6 +2558,18 @@ function runTest(view, items, minutes, opts = {}) {
     // Already on #/test, so re-render the builder directly.
     $("#again", view).addEventListener("click", (e) => { e.preventDefault(); route(); });
     $("#share-test", view)?.addEventListener("click", () => openShareTest(items, { minutes }));
+    const qsOnly = items.map(({ q, topic }) => { const { showPassage, ...rest } = q; return { ...rest, topicName: rest.topicName || topic.name }; });
+    const wrong = results.map((r, i) => (r.correct ? -1 : i)).filter((i) => i >= 0);
+    let savedId = null;
+    $("#save-test", view).addEventListener("click", (e) => {
+      const n = prompt("Name this test so you can find it in 📂 My tests:", testName(qsOnly));
+      if (n === null) return;
+      const t = saveTest({ id: savedId, name: n.trim().slice(0, 80) || testName(qsOnly), questions: qsOnly, minutes, marked: wrong });
+      savedId = t.id;
+      e.target.textContent = "✓ Saved";
+      toast(`💾 Saved "${t.name}" — find it in 📂 My tests on the AI test tab.`);
+    });
+    $("#pdf-test", view).addEventListener("click", () => printTestDialog(testName(qsOnly), qsOnly, wrong));
     window.scrollTo(0, 0);
   }
 }

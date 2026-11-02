@@ -1282,3 +1282,37 @@ body::before {
 /* Test options (year levels and difficulty) */
 .test-opt { display: flex; flex-direction: column; gap: 8px; }
 .test-levels .chip-check { padding: 6px 10px; font-size: 13px; }
+
+/* AI test: save / new / my tests / PDF, highlighted questions */
+.test-head { flex-wrap: wrap; gap: 8px; }
+.test-tools { gap: 6px; flex-wrap: wrap; }
+.draft-list li.marked { background: var(--accent-soft); border-radius: 8px; }
+.draft-btns { display: inline-flex; gap: 2px; flex: none; }
+.draft-star.on { filter: none; }
+.saved-tests { display: flex; flex-direction: column; gap: 8px; }
+.saved-test { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.saved-test-info { display: flex; flex-direction: column; min-width: 0; }
+.saved-test-btns { gap: 4px; }
+
+/* Printable test (Save as PDF) */
+#print-test { display: none; }
+@media print {
+  body.printing-test { background: #fff !important; }
+  body.printing-test > *:not(#print-test) { display: none !important; }
+  body.printing-test #print-test { display: block; color: #000; font: 11pt/1.45 Inter, Arial, sans-serif; }
+  .pt-head h1 { font-size: 18pt; margin: 0 0 4mm; }
+  .pt-head { border-bottom: 0.4mm solid #000; padding-bottom: 3mm; margin-bottom: 5mm; }
+  .pt-note { font-size: 9pt; color: #555; margin-top: 2mm; }
+  .pt-q { break-inside: avoid; page-break-inside: avoid; margin: 0 0 6mm; }
+  .pt-q.flagged { border-left: 1mm solid #8A1C3C; padding-left: 3mm; }
+  .pt-passage { white-space: pre-wrap; border: 0.3mm solid #999; border-radius: 2mm; padding: 3mm; margin-bottom: 3mm; font-size: 10pt; }
+  .pt-prompt { margin-bottom: 2mm; }
+  .pt-vis svg { max-width: 75mm; height: auto; }
+  .pt-vis .vz-hint { display: none; }
+  .pt-opts { margin: 1mm 0 0 6mm; padding-left: 4mm; }
+  .pt-lines div { border-bottom: 0.3mm solid #aaa; height: 8mm; }
+  .pt-answers { break-before: page; page-break-before: always; }
+  .pt-answers h2 { font-size: 15pt; }
+  .pt-answers li { margin-bottom: 2mm; break-inside: avoid; }
+  .pt-foot { margin-top: 8mm; font-size: 8pt; color: #888; text-align: right; }
+}
