@@ -1316,3 +1316,10 @@ body::before {
   .pt-answers li { margin-bottom: 2mm; break-inside: avoid; }
   .pt-foot { margin-top: 8mm; font-size: 8pt; color: #888; text-align: right; }
 }
+
+/* Flag any question */
+.q-flag { float: right; margin: 0 0 6px 8px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.q-flag:hover { border-color: var(--accent); color: var(--accent); }
+.q-flag.on { background: #FFF4D6; border-color: #E8B931; color: #7A5600; }
+:root[data-theme="dark"] .q-flag.on { background: #3A2E12; border-color: #B8922A; color: #F2D27A; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .q-flag.on { background: #3A2E12; border-color: #B8922A; color: #F2D27A; } }

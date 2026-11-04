@@ -23,6 +23,7 @@ function saveTest({ id, name, questions, minutes = 20, marked = [] }) {
   let t = id && state.tests.find((x) => x.id === id);
   if (t) Object.assign(t, { name: name || t.name, questions, minutes, marked, updated: now });
   else { t = { id: id || uid("t"), name: name || testName(questions), questions, minutes, marked, created: now, updated: now }; state.tests.unshift(t); }
+  state.deleted = state.deleted.filter((d) => d !== t.id);
   storeSavedTests(state);
   return t;
 }
@@ -139,7 +140,8 @@ function openMyTests(onOpen) {
   const box = document.createElement("div");
   box.className = "modal";
   const draw = () => {
-    const { tests } = loadSavedTests();
+    const tests = loadSavedTests().tests.filter((t) => t.id !== FLAG_ID || t.questions.length)
+      .sort((a, b) => (a.id === FLAG_ID ? -1 : b.id === FLAG_ID ? 1 : 0));
     box.innerHTML = `<div class="card stack" role="dialog" aria-label="My saved tests">
       <div class="row between"><h3 style="margin:0;">📂 My saved tests</h3><button class="btn ghost sm" type="button" data-close>Close</button></div>
       ${tests.length ? `<div class="saved-tests">${tests.map((t) => `<div class="saved-test">
@@ -147,8 +149,8 @@ function openMyTests(onOpen) {
           <div class="row saved-test-btns">
             <button class="btn sm" type="button" data-st-open="${esc(t.id)}">Open</button>
             <button class="btn ghost sm" type="button" data-st-pdf="${esc(t.id)}" title="Save as PDF">🖨️ PDF</button>
-            <button class="btn ghost sm" type="button" data-st-ren="${esc(t.id)}" title="Rename">✏️</button>
-            <button class="btn ghost sm" type="button" data-st-del="${esc(t.id)}" title="Delete" aria-label="Delete ${esc(t.name)}">🗑️</button>
+            ${t.id === FLAG_ID ? "" : `<button class="btn ghost sm" type="button" data-st-ren="${esc(t.id)}" title="Rename">✏️</button>
+            <button class="btn ghost sm" type="button" data-st-del="${esc(t.id)}" title="Delete" aria-label="Delete ${esc(t.name)}">🗑️</button>`}
           </div></div>`).join("")}</div>`
         : `<p class="muted small" style="margin:0;">No saved tests yet. Build a test, then press 💾 Save test.</p>`}
     </div>`;
@@ -174,3 +176,37 @@ function openMyTests(onOpen) {
   // Pick up tests saved on other devices.
   pullSavedTests().then((changed) => { if (changed && document.body.contains(box)) draw(); });
 }
+
+// ---------------------------------------------------------------- Flag any question, anywhere
+// Every question on the site (practice, tests, results, games) has a ☆ Flag button. Flagged questions are
+// collected in one saved test, "⭐ Flagged questions", in 📂 My tests — so they sync like any saved test.
+const FLAG_ID = "flagged", FLAG_NAME = "⭐ Flagged questions";
+const flagKey = (q) => String(q.id || q.prompt);
+const flagRegistry = new Map(); // key → the question shown on screen
+const flaggedQuestions = () => loadSavedTests().tests.find((t) => t.id === FLAG_ID)?.questions || [];
+function flagButtonHTML(q, topicLabel = "") {
+  if (!q || !q.prompt || !authUser) return "";
+  const key = flagKey(q);
+  const { showPassage, ...copy } = q;
+  flagRegistry.set(key, { ...copy, topicName: q.topicName || String(topicLabel).split(" · ")[0].replace(/^[^A-Za-z]+/, "") });
+  const on = flaggedQuestions().some((x) => flagKey(x) === key);
+  return `<button type="button" class="q-flag${on ? " on" : ""}" data-flag-q="${esc(key)}" aria-pressed="${on}" title="${on ? "Remove from ⭐ Flagged questions" : "Flag this question to come back to"}">${on ? "⭐ Flagged" : "☆ Flag"}</button>`;
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-flag-q]");
+  if (!btn || !authUser) return;
+  e.preventDefault();
+  const key = btn.dataset.flagQ, q = flagRegistry.get(key);
+  if (!q) return;
+  const list = flaggedQuestions().slice();
+  const at = list.findIndex((x) => flagKey(x) === key);
+  const on = at < 0;
+  if (on) list.unshift(q); else list.splice(at, 1);
+  saveTest({ id: FLAG_ID, name: FLAG_NAME, questions: list, minutes: 0, marked: [] });
+  $$("[data-flag-q]").filter((b) => b.dataset.flagQ === key).forEach((b) => {
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+    b.textContent = on ? "⭐ Flagged" : "☆ Flag";
+  });
+  toast(on ? "⭐ Flagged — find it in Test → AI test → 📂 My tests." : "Removed from your flagged questions.");
+});

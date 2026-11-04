@@ -1131,6 +1131,7 @@ const passageFlags = (qs) => qs.map((q, i) => !!q.passage && (i === 0 || qs[i - 
 function questionHTML(q, i, topicLabel = "", showPassage = q.showPassage) {
   return `
     <div class="question" data-qid="${q.id}">
+      ${flagButtonHTML(q, topicLabel)}
       ${topicLabel ? `<div class="tag" style="display:inline-block; margin-bottom:6px;">${esc(topicLabel)}</div>` : ""}
       ${q.style ? `<div class="tag q-style q-style-${esc(q.style.toLowerCase().replace(/[^a-z]/g, ""))}">${esc(q.style)}</div>` : ""}
       ${showPassage ? `<div class="passage">${esc(q.passage)}</div>` : q.passage ? `<div class="muted small passage-ref">📖 Use the information above.</div>` : ""}
