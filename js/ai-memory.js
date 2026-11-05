@@ -21,7 +21,7 @@ const chatTimers = {};
 function saveChat(chat) {
   chat.updatedAt = new Date().toISOString();
   const messages = chat.messages.filter((m) => !m.pending && m.role !== "err").slice(-100)
-    .map((m) => ({ role: m.role, text: m.text, ...(m.photo ? { photo: true } : {}), ...(m.note ? { note: m.note } : {}) }));
+    .map((m) => ({ role: m.role, text: m.text, ...(m.photo ? { photo: true } : {}), ...(m.files?.length ? { files: m.files.slice(0, 10) } : {}), ...(m.note ? { note: m.note } : {}) }));
   const saved = { id: chat.id, title: chat.title, messages, createdAt: chat.createdAt, updatedAt: chat.updatedAt };
   store(chatsKey(), [saved, ...localChats().filter((c) => c.id !== chat.id)].slice(0, 60));
   if (!cloudChats) return;

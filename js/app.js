@@ -2591,6 +2591,7 @@ document.addEventListener("submit", (e) => { const el = e.target.querySelector?.
 // Chats are saved (js/ai-memory.js), so the tutor sees the earlier messages in a chat, you can go back to
 // old chats, and it remembers short notes about you across all chats.
 let tutorChatId = null; // the chat that was open, so switching pages comes back to it
+const tutorFiles = []; // files given to the tutor (js/uploads.js) — kept while you're on the site, used in every message
 const TUTOR_HISTORY = 12; // earlier messages sent with each question
 
 function tutorPrompt(earlier, question, hasPhoto) {
@@ -2630,6 +2631,10 @@ function pageTutor(view) {
           <button class="btn ghost sm tutor-new" type="button" data-new-chat title="Start a new chat">＋ New</button>
         </div>
         <div class="tutor-fb">${levelPickerHTML()}${feedbackPickerHTML("How the tutor talks when it checks your work or a photo of your working.")}</div>
+        <details class="tutor-files" id="t-files"${tutorFiles.length ? " open" : ""}>
+          <summary>📎 Files for the tutor <span class="muted small" id="t-files-count"></span></summary>
+          <div id="t-files-box">${uploadBoxHTML("The tutor reads these with every message — e.g. “Explain question 3 on my worksheet” or “Quiz me on my notes”. They stay while you're on the site.")}</div>
+        </details>
         <div class="chat" id="chat"><p class="muted small" style="margin:auto;">Loading your chats…</p></div>
         <div class="attach-preview hidden" id="attach"><img alt=""><button class="btn ghost sm" id="attach-x">Remove photo</button></div>
         <form class="chat-form" id="chat-form" autocomplete="off">
@@ -2642,6 +2647,9 @@ function pageTutor(view) {
     </div>`;
 
   const chatBox = $("#chat", view), side = $("#t-side", view), send = $("#send", view);
+  const filesCount = () => { const n = tutorFiles.length; $("#t-files-count", view).textContent = n ? `· ${n} file${n === 1 ? "" : "s"}` : "· PDF, Word, PowerPoint, text or photos"; };
+  wireUploadBox($("#t-files-box", view), tutorFiles, filesCount);
+  filesCount();
   const draw = () => {
     if (!current) return;
     $("#t-title", view).textContent = current.title;
@@ -2653,7 +2661,7 @@ function pageTutor(view) {
       $$(".chips button", chatBox).forEach((b) => b.addEventListener("click", () => { $("#ask", view).value = b.textContent; $("#chat-form", view).requestSubmit(); }));
       return;
     }
-    chatBox.innerHTML = current.messages.map((m) => `<div class="bubble ${m.role}${m.pending ? " pending" : ""}">${m.image ? `<img src="${m.image}" alt="Your photo">` : m.photo ? `<span class="bubble-photo">📷 Photo</span>` : ""}${esc(m.text)}${m.note ? `<div class="bubble-note">${esc(m.note)}</div>` : ""}</div>`).join("");
+    chatBox.innerHTML = current.messages.map((m) => `<div class="bubble ${m.role}${m.pending ? " pending" : ""}">${m.image ? `<img src="${m.image}" alt="Your photo">` : m.photo ? `<span class="bubble-photo">📷 Photo</span>` : ""}${m.files?.length ? `<span class="bubble-photo">📎 ${esc(m.files.join(", "))}</span>` : ""}${esc(m.text)}${m.note ? `<div class="bubble-note">${esc(m.note)}</div>` : ""}</div>`).join("");
     chatBox.scrollTop = chatBox.scrollHeight;
   };
   const drawList = () => {
@@ -2722,10 +2730,12 @@ function pageTutor(view) {
     e.preventDefault();
     const input = $("#ask", view);
     const question = input.value.trim();
-    if (!current || busy || (!question && !pendingImage)) return;
+    const files = uploadsReady(tutorFiles);
+    if (!current || busy || (!question && !pendingImage && !files.length)) return;
+    if (tutorFiles.some((f) => f.status === "reading")) return toast("Your files are still loading — wait a moment, then send again.");
     const image = pendingImage, chat = current; // the student may switch chats while the tutor is thinking
     const earlier = chat.messages.filter((m) => !m.pending && m.role !== "err");
-    chat.messages.push({ role: "me", text: question || "Can you check my working?", image: image?.base64, photo: !!image });
+    chat.messages.push({ role: "me", text: question || (image ? "Can you check my working?" : "Can you look at my files?"), image: image?.base64, photo: !!image, ...(files.length ? { files: files.map((f) => f.name) } : {}) });
     const pending = { role: "bot", text: "Thinking…", pending: true };
     chat.messages.push(pending);
     if (!chats.includes(chat)) chats.unshift(chat);
@@ -2738,7 +2748,9 @@ function pageTutor(view) {
 
     try {
       await Promise.all([loadMemory(), ensureCalendar()]);
-      const body = { question: tutorPrompt(earlier, question, !!image) };
+      const prompt = tutorPrompt(earlier, question || (image ? "" : "Have a look at my files and tell me what they're about, then ask what I'd like help with."), !!image);
+      const body = files.length ? await withUploads(prompt, tutorFiles, "The student has given you these files to help with. Use them to answer — e.g. explain a question from a worksheet, quiz them on their notes, or check their work.") : { question: prompt };
+      // A photo of working takes priority over pictures in the files (one image can go with each message).
       if (image) { body.image = image.base64; body.imageMimeType = image.mimeType; }
       const raw = await askTutorRaw(body, { onRetry: (n) => say(`The AI is busy — trying again (${n + 1} of ${AI_TRIES})…`) });
       const data = parseLooseJSON(raw);

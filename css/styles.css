@@ -1323,3 +1323,8 @@ body::before {
 .q-flag.on { background: #FFF4D6; border-color: #E8B931; color: #7A5600; }
 :root[data-theme="dark"] .q-flag.on { background: #3A2E12; border-color: #B8922A; color: #F2D27A; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .q-flag.on { background: #3A2E12; border-color: #B8922A; color: #F2D27A; } }
+
+/* AI Tutor: files area */
+.tutor-files { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; background: var(--surface); }
+.tutor-files summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.tutor-files[open] summary { margin-bottom: 8px; }
