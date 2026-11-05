@@ -3023,7 +3023,7 @@ function pageSettings(view) {
 
     <div class="section-label">Tutor voice</div>
     <div class="card stack">
-      <p class="muted small" style="margin:0;">The voice the AI tutor uses in voice chat (🎙️ on the Tutor page). The voices come from your device, so different devices have different ones.</p>
+      <p class="muted small" style="margin:0;">The voice the AI tutor uses in voice chat (🎙️ on the Tutor page). It automatically picks the smoothest voice your device has. Tip: Microsoft Edge has the most natural-sounding voices, and Apple devices sound great too.</p>
       ${voiceSettingsHTML()}
     </div>
 

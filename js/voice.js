@@ -17,13 +17,26 @@ function loadVoices() {
 }
 if (canSpeak) { loadVoices(); speechSynthesis.addEventListener?.("voiceschanged", () => { loadVoices(); fillVoiceSelects(); }); }
 
-// The chosen voice, or the most natural-sounding Australian/English one available.
+// The chosen voice, or the smoothest natural-sounding English voice on this device:
+// Edge's "Natural" voices and Apple's Enhanced/Premium voices are the best, then Google's, then the rest.
+// Novelty and robotic voices are skipped.
+const ROBOTIC = /espeak|compact|albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|fred|good news|hysterical|jester|junior|organ|princess|ralph|superstar|trinoids|whisper|wobble|zarvox|kathy|grandma|grandpa|rocko|shelley|flo|eddy|reed|sandy/i;
+function voiceScore(v) {
+  let s = 0;
+  if (/natural/i.test(v.name) && /online|microsoft/i.test(v.name)) s += 40;   // Microsoft Edge neural voices
+  if (/premium|enhanced|neural|siri/i.test(v.name)) s += 30;                    // Apple / neural voices
+  if (/^google/i.test(v.name)) s += 20;                                         // Chrome's Google voices
+  if (/en[-_]AU/i.test(v.lang)) s += 6; else if (/en[-_]GB/i.test(v.lang)) s += 4; else if (/en[-_]US/i.test(v.lang)) s += 3;
+  if (/william|daniel|lee|gordon|ryan|guy|christopher|eric|andrew|brian|male/i.test(v.name)) s += 2; // a calm male voice, like the video ad
+  if (v.localService === false) s += 1;
+  if (ROBOTIC.test(v.name)) s -= 100;
+  return s;
+}
 function pickVoice() {
   const voices = voiceList.length ? voiceList : loadVoices();
   const chosen = voices.find((v) => v.name === voicePrefs().name);
   if (chosen) return chosen;
-  const score = (v) => (/en-AU/i.test(v.lang) ? 4 : /en-GB/i.test(v.lang) ? 2 : 1) + (/natural|neural|online|google|siri|premium|enhanced/i.test(v.name) ? 3 : 0);
-  return voices.slice().sort((a, b) => score(b) - score(a))[0] || null;
+  return voices.slice().sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
 }
 
 // Turns maths symbols and markup into words so the reply sounds right.
@@ -74,7 +87,7 @@ function stopSpeaking() {
 const NATURAL_VOICES = [["azure:en-AU-WilliamNeural", "William — Australian male (natural)"], ["azure:en-AU-NatashaNeural", "Natasha — Australian female (natural)"]];
 let naturalOff = false;           // turned off for this visit after a failure
 let voiceAudioEl = null, voiceAudioCtx = null, voiceAnalyser = null;
-const usingNatural = () => !naturalOff && (voicePrefs().name || NATURAL_VOICES[0][0]).startsWith("azure:");
+const usingNatural = () => !naturalOff && String(voicePrefs().name || "").startsWith("azure:");
 function voiceAudio() {
   if (voiceAudioEl) return voiceAudioEl;
   voiceAudioEl = new Audio();
@@ -177,11 +190,13 @@ function voiceSettingsHTML() {
 }
 function fillVoiceSelects() {
   const voices = voiceList.length ? voiceList : loadVoices();
-  const cur = voicePrefs().name || NATURAL_VOICES[0][0];
+  const cur = voicePrefs().name || "";
+  const best = pickVoice();
+  const good = voices.filter((x) => !ROBOTIC.test(x.name)).sort((a, b) => voiceScore(b) - voiceScore(a));
   $$("[data-voice-name]").forEach((sel) => {
-    sel.innerHTML = `<optgroup label="Natural voices (same on every device)">${NATURAL_VOICES.map(([k, l]) => `<option value="${k}"${k === cur ? " selected" : ""}>${esc(l)}</option>`).join("")}</optgroup>
-      <optgroup label="This device's voices">${voices.length
-        ? voices.map((v) => `<option value="${esc(v.name)}"${v.name === cur ? " selected" : ""}>${esc(v.name.replace(/\s*\(.*?\)\s*/g, " ").trim())} · ${esc(v.lang)}</option>`).join("")
+    sel.innerHTML = `<option value=""${!cur ? " selected" : ""}>✨ Smoothest voice on this device${best ? ` (${esc(best.name.replace(/\s*\(.*?\)\s*/g, " ").replace(/^Microsoft\s+/, "").trim())})` : ""}</option>
+      <optgroup label="Other voices on this device">${good.length
+        ? good.map((v) => `<option value="${esc(v.name)}"${v.name === cur ? " selected" : ""}>${esc(v.name.replace(/\s*\(.*?\)\s*/g, " ").trim())} · ${esc(v.lang)}</option>`).join("")
         : `<option value="device">Your device's default voice</option>`}</optgroup>`;
   });
 }
