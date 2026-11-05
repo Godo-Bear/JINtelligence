@@ -2639,11 +2639,14 @@ function pageTutor(view) {
         </details>
         <div class="chat" id="chat"><p class="muted small" style="margin:auto;">Loading your chats…</p></div>
         <div class="attach-preview hidden" id="attach"><img alt=""><button class="btn ghost sm" id="attach-x">Remove photo</button></div>
-        <div class="voice-bar hidden" id="t-voice-bar" data-state="paused" role="status" aria-live="polite">
-          <span class="voice-dot" aria-hidden="true"></span>
-          <span class="voice-text"><b id="t-voice-state">Voice chat</b><span class="muted small" id="t-voice-heard"></span></span>
-          <button type="button" class="btn secondary sm" id="t-voice-talk">🎙️ Talk</button>
-          <button type="button" class="btn sm" id="t-voice-stop">Stop</button>
+        <div class="voice-overlay hidden" id="t-voice-bar" data-state="paused" role="dialog" aria-label="Voice chat with the tutor">
+          <div class="voice-top">JIN<b>telligence</b> · Voice chat</div>
+          <div class="voice-orb-wrap" aria-hidden="true"><div class="voice-orb" id="t-voice-orb"><span></span><span></span><span></span></div></div>
+          <div class="voice-caption" role="status" aria-live="polite"><b id="t-voice-state">Voice chat</b><span id="t-voice-heard"></span></div>
+          <div class="voice-controls">
+            <button type="button" class="voice-btn" id="t-voice-talk" title="Talk (or interrupt the tutor)" aria-label="Talk">🎙️</button>
+            <button type="button" class="voice-btn voice-end" id="t-voice-stop" title="End voice chat" aria-label="End voice chat">✕</button>
+          </div>
         </div>
         <form class="chat-form" id="chat-form" autocomplete="off">
           <button type="button" class="btn secondary" id="photo" title="Add a photo of your working">📷</button>
@@ -2736,8 +2739,17 @@ function pageTutor(view) {
   $("#attach-x", view).addEventListener("click", clearImage);
 
   // ---- Voice chat: listen → send → read the reply aloud → listen again, until Stop.
-  const vbar = $("#t-voice-bar", view);
-  let stopListen = null;
+  const vbar = $("#t-voice-bar", view), orb = $("#t-voice-orb", view);
+  let stopListen = null, stopMic = null, wordPulse = 0, orbFrame = 0;
+  // The orb grows with your voice while listening, and pulses with each word while the tutor speaks.
+  let micLevel = 0;
+  const animateOrb = () => {
+    wordPulse *= 0.9;
+    const state = vbar.dataset.state;
+    const level = state === "listening" ? micLevel : state === "speaking" ? wordPulse : 0;
+    orb.style.setProperty("--level", level.toFixed(3));
+    if (tutorVoice) orbFrame = requestAnimationFrame(animateOrb);
+  };
   const vstate = (state, label, heard = "") => {
     vbar.dataset.state = state;
     $("#t-voice-state", view).textContent = label;
@@ -2747,7 +2759,7 @@ function pageTutor(view) {
     if (!tutorVoice || !document.body.contains(chatBox)) return;
     stopSpeaking();
     stopListen?.();
-    vstate("listening", "Listening…", "Say your question");
+    vstate("listening", "Listening…", "Go ahead, I'm listening");
     stopListen = listenOnce({
       onInterim: (t) => { $("#t-voice-heard", view).textContent = t; },
       onText: (t) => {
@@ -2756,12 +2768,15 @@ function pageTutor(view) {
         $("#ask", view).value = t;
         $("#chat-form", view).requestSubmit();
       },
-      onEnd: (heard) => { if (!heard && tutorVoice && vbar.dataset.state === "listening") vstate("paused", "Didn't catch that", "Tap 🎙️ Talk and try again"); },
-      onError: (err) => vstate("paused", "Microphone problem", err === "not-allowed" || err === "service-not-allowed" ? "Allow the microphone for this site, then tap 🎙️ Talk" : "Tap 🎙️ Talk to try again"),
+      onEnd: (heard) => { if (!heard && tutorVoice && vbar.dataset.state === "listening") vstate("paused", "Didn't catch that", "Tap 🎙️ to try again"); },
+      onError: (err) => vstate("paused", "Microphone problem", err === "not-allowed" || err === "service-not-allowed" ? "Allow the microphone for this site, then tap 🎙️" : "Tap 🎙️ to try again"),
     });
   };
   const endVoice = () => {
     tutorVoice = false;
+    cancelAnimationFrame(orbFrame);
+    stopMic?.(); stopMic = null;
+    document.body.classList.remove("voice-open");
     stopListen?.(); stopListen = null;
     stopSpeaking();
     vbar.classList.add("hidden");
@@ -2773,6 +2788,9 @@ function pageTutor(view) {
     if (!canListen) return toast("Voice chat needs Chrome, Edge or Safari. You can still type to the tutor.");
     tutorVoice = true;
     vbar.classList.remove("hidden");
+    document.body.classList.add("voice-open");
+    stopMic = startMicLevel((l) => { micLevel = l; });
+    animateOrb();
     $("#t-voice", view).classList.add("on");
     listen();
   });
@@ -2827,8 +2845,11 @@ function pageTutor(view) {
       if (chat === current) { draw(); if (!tutorVoice) input.focus(); }
       drawList();
       if (tutorVoice) {
-        if (pending.role === "err") vstate("paused", "Something went wrong", "Tap 🎙️ Talk to try again");
-        else { vstate("speaking", "Speaking…", "Tap 🎙️ Talk to interrupt"); speak(pending.text, () => { if (tutorVoice) listen(); }); }
+        if (pending.role === "err") vstate("paused", "Something went wrong", "Tap 🎙️ to try again");
+        else {
+          vstate("speaking", "", pending.text.length > 220 ? pending.text.slice(0, 220).trim() + "…" : pending.text);
+          speak(pending.text, () => { if (tutorVoice) listen(); }, () => { wordPulse = 0.7 + Math.random() * 0.3; });
+        }
       }
     }
   });

@@ -38,7 +38,7 @@ function speakable(text) {
 }
 
 let speakingNow = null;
-function speak(text, onEnd = () => {}) {
+function speak(text, onEnd = () => {}, onWord = () => {}) {
   if (!canSpeak) { onEnd(); return; }
   speechSynthesis.cancel();
   // Long replies are split into sentences — some browsers stop speaking long text part-way.
@@ -54,6 +54,8 @@ function speak(text, onEnd = () => {}) {
     const u = new SpeechSynthesisUtterance(parts[i++].trim());
     if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = "en-AU";
     u.rate = rate;
+    u.onstart = onWord;
+    u.onboundary = onWord; // each word — makes the voice orb pulse
     u.onend = next;
     u.onerror = next;
     speechSynthesis.speak(u);
@@ -121,3 +123,30 @@ document.addEventListener("change", (e) => {
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-voice-test]")) speak("Hi! I'm your JINtelligence tutor. Ask me anything you're learning.");
 });
+
+// How loud the microphone is (0 to 1), for the voice orb. Returns a function that stops it.
+function startMicLevel(onLevel) {
+  if (!navigator.mediaDevices?.getUserMedia || !(window.AudioContext || window.webkitAudioContext)) return () => {};
+  let stream = null, ctx = null, frame = 0, stopped = false;
+  navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then((s) => {
+    if (stopped) { s.getTracks().forEach((t) => t.stop()); return; }
+    stream = s;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    ctx.createMediaStreamSource(s).connect(analyser);
+    const data = new Uint8Array(analyser.fftSize);
+    let smooth = 0;
+    const tick = () => {
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) { const x = (data[i] - 128) / 128; sum += x * x; }
+      const rms = Math.sqrt(sum / data.length);
+      smooth = smooth * 0.7 + Math.min(1, rms * 6) * 0.3;
+      onLevel(smooth);
+      frame = requestAnimationFrame(tick);
+    };
+    tick();
+  }).catch(() => { /* no mic level — the orb still animates */ });
+  return () => { stopped = true; cancelAnimationFrame(frame); stream?.getTracks().forEach((t) => t.stop()); ctx?.close?.(); onLevel(0); };
+}
