@@ -2591,6 +2591,7 @@ document.addEventListener("submit", (e) => { const el = e.target.querySelector?.
 // Chats are saved (js/ai-memory.js), so the tutor sees the earlier messages in a chat, you can go back to
 // old chats, and it remembers short notes about you across all chats.
 let tutorChatId = null; // the chat that was open, so switching pages comes back to it
+let tutorVoice = false; // voice chat is on: replies are short and spoken
 const tutorFiles = []; // files given to the tutor (js/uploads.js) — kept while you're on the site, used in every message
 const TUTOR_HISTORY = 12; // earlier messages sent with each question
 
@@ -2604,6 +2605,7 @@ ${recent.length ? `The conversation so far${earlier.length > recent.length ? " (
 
 When you check the student's work or answers (including photos of their working), follow this:
 ${feedbackTone()}
+${tutorVoice ? "\nVOICE CHAT: The student is TALKING to you and your reply will be read aloud. Their words come from speech-to-text, so allow for small mistakes. Reply like a friendly spoken conversation: 1–4 short sentences, no lists, symbols, bullet points or diagrams, numbers written so they read well aloud. If it helps, end with a short question to keep the conversation going.\n" : ""}
 
 Answer the student's new message, carrying on naturally from the conversation — they may refer back to earlier messages (like "the second one" or "explain that again"). In the reply write plain text with no Markdown or LaTeX, use × and ÷, and keep it fairly short unless they ask for more detail.
 
@@ -2637,8 +2639,15 @@ function pageTutor(view) {
         </details>
         <div class="chat" id="chat"><p class="muted small" style="margin:auto;">Loading your chats…</p></div>
         <div class="attach-preview hidden" id="attach"><img alt=""><button class="btn ghost sm" id="attach-x">Remove photo</button></div>
+        <div class="voice-bar hidden" id="t-voice-bar" data-state="paused" role="status" aria-live="polite">
+          <span class="voice-dot" aria-hidden="true"></span>
+          <span class="voice-text"><b id="t-voice-state">Voice chat</b><span class="muted small" id="t-voice-heard"></span></span>
+          <button type="button" class="btn secondary sm" id="t-voice-talk">🎙️ Talk</button>
+          <button type="button" class="btn sm" id="t-voice-stop">Stop</button>
+        </div>
         <form class="chat-form" id="chat-form" autocomplete="off">
           <button type="button" class="btn secondary" id="photo" title="Add a photo of your working">📷</button>
+          <button type="button" class="btn secondary" id="t-voice" title="Voice chat — talk to the tutor" aria-label="Voice chat">🎙️</button>
           <input type="file" id="photo-input" accept="image/*" class="hidden">
           <textarea class="chat-input" rows="1" id="ask" placeholder="Ask a question…" maxlength="4000"></textarea>
           <button class="btn" type="submit" id="send">Ask</button>
@@ -2726,6 +2735,50 @@ function pageTutor(view) {
   const clearImage = () => { pendingImage = null; $("#photo-input", view).value = ""; hide($("#attach", view)); };
   $("#attach-x", view).addEventListener("click", clearImage);
 
+  // ---- Voice chat: listen → send → read the reply aloud → listen again, until Stop.
+  const vbar = $("#t-voice-bar", view);
+  let stopListen = null;
+  const vstate = (state, label, heard = "") => {
+    vbar.dataset.state = state;
+    $("#t-voice-state", view).textContent = label;
+    $("#t-voice-heard", view).textContent = heard;
+  };
+  const listen = () => {
+    if (!tutorVoice || !document.body.contains(chatBox)) return;
+    stopSpeaking();
+    stopListen?.();
+    vstate("listening", "Listening…", "Say your question");
+    stopListen = listenOnce({
+      onInterim: (t) => { $("#t-voice-heard", view).textContent = t; },
+      onText: (t) => {
+        stopListen = null;
+        vstate("thinking", "Thinking…", `“${t}”`);
+        $("#ask", view).value = t;
+        $("#chat-form", view).requestSubmit();
+      },
+      onEnd: (heard) => { if (!heard && tutorVoice && vbar.dataset.state === "listening") vstate("paused", "Didn't catch that", "Tap 🎙️ Talk and try again"); },
+      onError: (err) => vstate("paused", "Microphone problem", err === "not-allowed" || err === "service-not-allowed" ? "Allow the microphone for this site, then tap 🎙️ Talk" : "Tap 🎙️ Talk to try again"),
+    });
+  };
+  const endVoice = () => {
+    tutorVoice = false;
+    stopListen?.(); stopListen = null;
+    stopSpeaking();
+    vbar.classList.add("hidden");
+    $("#t-voice", view).classList.remove("on");
+  };
+  cleanup = endVoice; // leaving the page stops listening and talking
+  $("#t-voice", view).addEventListener("click", () => {
+    if (tutorVoice) return endVoice();
+    if (!canListen) return toast("Voice chat needs Chrome, Edge or Safari. You can still type to the tutor.");
+    tutorVoice = true;
+    vbar.classList.remove("hidden");
+    $("#t-voice", view).classList.add("on");
+    listen();
+  });
+  $("#t-voice-talk", view).addEventListener("click", listen); // also interrupts the tutor while it's talking
+  $("#t-voice-stop", view).addEventListener("click", endVoice);
+
   $("#chat-form", view).addEventListener("submit", async (e) => {
     e.preventDefault();
     const input = $("#ask", view);
@@ -2771,8 +2824,12 @@ function pageTutor(view) {
     busy = false;
     if (document.body.contains(chatBox)) {
       send.disabled = false;
-      if (chat === current) { draw(); input.focus(); }
+      if (chat === current) { draw(); if (!tutorVoice) input.focus(); }
       drawList();
+      if (tutorVoice) {
+        if (pending.role === "err") vstate("paused", "Something went wrong", "Tap 🎙️ Talk to try again");
+        else { vstate("speaking", "Speaking…", "Tap 🎙️ Talk to interrupt"); speak(pending.text, () => { if (tutorVoice) listen(); }); }
+      }
     }
   });
 
@@ -2940,6 +2997,12 @@ function pageSettings(view) {
     <div class="card stack">
       <p class="muted small" style="margin:0;">The AI can help with any subject at any level — from Prep to VCE, uni, TAFE and beyond. Pick your level so explanations, practice questions and feedback are pitched just right, or leave it on <b>Any level</b> and the AI works it out from what you ask.</p>
       ${levelPickerHTML()}
+    </div>
+
+    <div class="section-label">Tutor voice</div>
+    <div class="card stack">
+      <p class="muted small" style="margin:0;">The voice the AI tutor uses in voice chat (🎙️ on the Tutor page). The voices come from your device, so different devices have different ones.</p>
+      ${voiceSettingsHTML()}
     </div>
 
     <div class="section-label">AI feedback</div>
