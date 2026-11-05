@@ -2600,7 +2600,7 @@ function tutorPrompt(earlier, question, hasPhoto) {
   const lines = recent.map((m) => `${m.role === "me" ? "Student" : "Tutor"}: ${m.photo ? "[sent a photo] " : ""}${String(m.text).slice(0, 1500)}`);
   return `You are chatting with a student as their tutor. ${ANY_SUBJECT}
 ${learnerLine()}
-${calendarPrompt()}${memoryPrompt()}
+${calendarPrompt()}${memoryPrompt()}${flaggedPrompt()}
 ${recent.length ? `The conversation so far${earlier.length > recent.length ? " (the most recent messages)" : ""}:\n${lines.join("\n\n")}\n\n` : ""}Student's new message: ${question || "(no words, just the photo)"}${hasPhoto ? `\n(The student attached a photo, which is included.${question ? "" : " Look at their handwritten working and explain whether it's correct, and how to fix it if not."})` : ""}
 
 When you check the student's work or answers (including photos of their working), follow this:
@@ -2666,7 +2666,8 @@ function pageTutor(view) {
     if (!current) return;
     $("#t-title", view).textContent = current.title;
     if (!current.messages.length) {
-      const examples = ["How do I simplify 12/18?", "Explain photosynthesis simply", "Help me with VCE derivatives", "How do loops work in Python?"];
+      const flagged = flaggedForAI().length;
+      const examples = [...(flagged ? [`Help me with my ${flagged} flagged question${flagged === 1 ? "" : "s"}`] : []), "How do I simplify 12/18?", "Explain photosynthesis simply", "Help me with VCE derivatives", "How do loops work in Python?"].slice(0, flagged ? 4 : 4);
       const welcome = aiMemory?.enabled && aiMemory.items.length ? "Welcome back! What would you like help with today?" : "What would you like help with?";
       chatBox.innerHTML = `<div class="chat-empty">${welcome}
         <div class="chips">${examples.map((x) => `<button type="button" class="btn secondary sm">${esc(x)}</button>`).join("")}</div></div>`;

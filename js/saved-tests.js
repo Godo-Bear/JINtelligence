@@ -210,3 +210,34 @@ document.addEventListener("click", (e) => {
   });
   toast(on ? "⭐ Flagged — find it in Test → AI test → 📂 My tests." : "Removed from your flagged questions.");
 });
+
+// ---------------------------------------------------------------- Flagged questions for the AI tutor
+// Everything the student has flagged (☆ Flag anywhere) or starred in a saved test, so the tutor can help with them.
+function flaggedForAI(limit = 25) {
+  const seen = new Set(), out = [];
+  const addQ = (q, from) => {
+    if (!q?.prompt || out.length >= limit) return;
+    const k = flagKey(q);
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ q, from });
+  };
+  const { tests } = loadSavedTests();
+  (tests.find((t) => t.id === FLAG_ID)?.questions || []).forEach((q) => addQ(q, "flagged"));
+  tests.filter((t) => t.id !== FLAG_ID).forEach((t) => (t.marked || []).forEach((i) => addQ(t.questions[i], `starred in "${t.name}"`)));
+  return out;
+}
+function flaggedPrompt() {
+  const list = flaggedForAI();
+  if (!list.length) return "";
+  const line = ({ q, from }, n) => {
+    const opts = q.options ? ` Choices: ${q.options.join(" | ")}.` : "";
+    const vis = q.visual && typeof describeVisual === "function" ? ` (Shows: ${describeVisual(q.visual)}.)` : "";
+    const ans = isVisualInput(q) ? visualAnswerText(q) : Array.isArray(q.answer) ? q.answer[0] : q.answer;
+    return `F${n + 1}. [${q.topicName || "General"} · ${from}] ${String(q.prompt).slice(0, 300)}${opts}${vis} — Correct answer: ${String(ans).slice(0, 150)}${q.explanation ? `. Explanation: ${String(q.explanation).slice(0, 200)}` : ""}`;
+  };
+  return `
+FLAGGED QUESTIONS: The student has flagged these test and practice questions to work on (F1 is the most recent). If they mention their flagged, starred or saved questions, "the questions I got wrong", or a question by its number (e.g. "F2"), use this list. Help them understand and work through each one step by step — guide them to the answer rather than just giving it, unless they ask for the answer. You can also suggest which ones to start with, spot patterns (e.g. lots of fraction questions), or quiz them on similar questions.
+${list.map(line).join("\n")}
+`;
+}
