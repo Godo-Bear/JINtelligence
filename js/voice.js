@@ -7,7 +7,8 @@ const canListen = !!SpeechRec;
 const canSpeak = "speechSynthesis" in window;
 
 const voicePrefKey = () => `apex-voice-${authUser.id}`;
-const voicePrefs = () => ({ name: "", rate: 1, ...(store(voicePrefKey()) || {}) });
+// Safe to call before the rest of the site has loaded or anyone has logged in.
+const voicePrefs = () => ({ name: "", rate: 1, ...((typeof store === "function" && typeof authUser !== "undefined" && authUser && store(voicePrefKey())) || {}) });
 
 let voiceList = [];
 function loadVoices() {
@@ -189,6 +190,7 @@ function voiceSettingsHTML() {
   </div>`;
 }
 function fillVoiceSelects() {
+  if (typeof $$ !== "function" || !document.querySelector("[data-voice-name]")) return;
   const voices = voiceList.length ? voiceList : loadVoices();
   const cur = voicePrefs().name || "";
   const best = pickVoice();

@@ -227,7 +227,7 @@ function flaggedForAI(limit = 25) {
   tests.filter((t) => t.id !== FLAG_ID).forEach((t) => (t.marked || []).forEach((i) => addQ(t.questions[i], `starred in "${t.name}"`)));
   return out;
 }
-function flaggedPrompt() {
+function flaggedPrompt(mode = "tutor") {
   const list = flaggedForAI();
   if (!list.length) return "";
   const line = ({ q, from }, n) => {
@@ -236,6 +236,10 @@ function flaggedPrompt() {
     const ans = isVisualInput(q) ? visualAnswerText(q) : Array.isArray(q.answer) ? q.answer[0] : q.answer;
     return `F${n + 1}. [${q.topicName || "General"} · ${from}] ${String(q.prompt).slice(0, 300)}${opts}${vis} — Correct answer: ${String(ans).slice(0, 150)}${q.explanation ? `. Explanation: ${String(q.explanation).slice(0, 200)}` : ""}`;
   };
+  if (mode === "test") return `
+FLAGGED QUESTIONS: The student has flagged these test and practice questions to work on (F1 is the most recent). If they ask for a test on their flagged, starred or wrong questions (or on "F2", "the fraction ones" and so on), build it from this list: write NEW questions that practise the same skills at the same level, and you may also include an original question exactly as it is if they ask for that. Otherwise, only use the list if it's relevant to what they ask for.
+${list.map(line).join("\n")}
+`;
   return `
 FLAGGED QUESTIONS: The student has flagged these test and practice questions to work on (F1 is the most recent). If they mention their flagged, starred or saved questions, "the questions I got wrong", or a question by its number (e.g. "F2"), use this list. Help them understand and work through each one step by step — guide them to the answer rather than just giving it, unless they ask for the answer. You can also suggest which ones to start with, spot patterns (e.g. lots of fraction questions), or quiz them on similar questions.
 ${list.map(line).join("\n")}

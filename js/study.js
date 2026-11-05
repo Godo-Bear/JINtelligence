@@ -156,7 +156,7 @@ function aiTestMode(view, host) {
     log: aiTest.log,
     placeholder: "e.g. 10 questions on fractions, mixed types",
     empty: "What do you want to be tested on?",
-    ideas: ["10 questions on fractions and decimals", "Science quiz on the solar system", "Plot points on the Cartesian plane", "A reading passage with questions", "History: ancient Egypt, mixed types", "Spot the mistake in grammar sentences"],
+    ideas: [...(flaggedForAI().length ? [`Make a test from my ${flaggedForAI().length} flagged question${flaggedForAI().length === 1 ? "" : "s"}`] : []), "10 questions on fractions and decimals", "Science quiz on the solar system", "Plot points on the Cartesian plane", "A reading passage with questions", "History: ancient Egypt, mixed types", "Spot the mistake in grammar sentences"].slice(0, 6),
     onChange: drawDraft,
     async onSend(text, hidden, progress) {
       const types = aiTest.types.map((k) => AI_TEST_TYPES[k]);
@@ -166,7 +166,7 @@ function aiTestMode(view, host) {
       const raw = await askTutorRaw(await withUploads(`You are a friendly tutor (based in Victoria, Australia) building a practice test WITH a student in a chat. The test can be on ANY subject or learning topic, at any level: school subjects from Prep to VCE, uni or TAFE topics, languages, coding, music, general knowledge, or anything school-appropriate they're interested in.
 ${testLevelLine()}
 ${testDiffLine()}
-${calendarPrompt()}${memoryPrompt()}
+${calendarPrompt()}${memoryPrompt()}${flaggedPrompt("test")}
 ${summary()}
 ${types.length ? `The student ticked these question types: ${types.join(", ")}. Use them.\n` : ""}
 What to do:
