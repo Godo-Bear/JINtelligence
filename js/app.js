@@ -2787,6 +2787,7 @@ function pageTutor(view) {
     if (tutorVoice) return endVoice();
     if (!canListen) return toast("Voice chat needs Chrome, Edge or Safari. You can still type to the tutor.");
     tutorVoice = true;
+    unlockVoiceAudio(); // lets phones play the natural voice later
     vbar.classList.remove("hidden");
     document.body.classList.add("voice-open");
     stopMic = startMicLevel((l) => { micLevel = l; });
@@ -2794,7 +2795,7 @@ function pageTutor(view) {
     $("#t-voice", view).classList.add("on");
     listen();
   });
-  $("#t-voice-talk", view).addEventListener("click", listen); // also interrupts the tutor while it's talking
+  $("#t-voice-talk", view).addEventListener("click", () => { unlockVoiceAudio(); listen(); }); // also interrupts the tutor while it's talking
   $("#t-voice-stop", view).addEventListener("click", endVoice);
 
   $("#chat-form", view).addEventListener("submit", async (e) => {
@@ -2848,7 +2849,7 @@ function pageTutor(view) {
         if (pending.role === "err") vstate("paused", "Something went wrong", "Tap 🎙️ to try again");
         else {
           vstate("speaking", "", pending.text.length > 220 ? pending.text.slice(0, 220).trim() + "…" : pending.text);
-          speak(pending.text, () => { if (tutorVoice) listen(); }, () => { wordPulse = 0.7 + Math.random() * 0.3; });
+          speak(pending.text, () => { if (tutorVoice) listen(); }, (l) => { wordPulse = l ?? 0.7 + Math.random() * 0.3; });
         }
       }
     }

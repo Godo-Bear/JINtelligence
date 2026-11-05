@@ -38,7 +38,7 @@ function speakable(text) {
 }
 
 let speakingNow = null;
-function speak(text, onEnd = () => {}, onWord = () => {}) {
+function speakDevice(text, onEnd = () => {}, onWord = () => {}) {
   if (!canSpeak) { onEnd(); return; }
   speechSynthesis.cancel();
   // Long replies are split into sentences — some browsers stop speaking long text part-way.
@@ -63,7 +63,76 @@ function speak(text, onEnd = () => {}, onWord = () => {}) {
   next();
   return () => { stopped = true; speakingNow = null; speechSynthesis.cancel(); };
 }
-function stopSpeaking() { speakingNow = null; if (canSpeak) speechSynthesis.cancel(); }
+function stopSpeaking() {
+  speakingNow = null;
+  if (canSpeak) speechSynthesis.cancel();
+  if (voiceAudioEl) { voiceAudioEl.pause(); voiceAudioEl.onended = null; }
+}
+
+// ---------------------------------------------------------------- Natural voices (Azure, via the "tutor-voice" edge function)
+// The same natural Australian voice for everyone. If it isn't set up or fails, the device's voice is used instead.
+const NATURAL_VOICES = [["azure:en-AU-WilliamNeural", "William — Australian male (natural)"], ["azure:en-AU-NatashaNeural", "Natasha — Australian female (natural)"]];
+let naturalOff = false;           // turned off for this visit after a failure
+let voiceAudioEl = null, voiceAudioCtx = null, voiceAnalyser = null;
+const usingNatural = () => !naturalOff && (voicePrefs().name || NATURAL_VOICES[0][0]).startsWith("azure:");
+function voiceAudio() {
+  if (voiceAudioEl) return voiceAudioEl;
+  voiceAudioEl = new Audio();
+  voiceAudioEl.preload = "auto";
+  try {
+    voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    voiceAnalyser = voiceAudioCtx.createAnalyser();
+    voiceAnalyser.fftSize = 256;
+    voiceAudioCtx.createMediaElementSource(voiceAudioEl).connect(voiceAnalyser);
+    voiceAnalyser.connect(voiceAudioCtx.destination);
+  } catch (e) { voiceAnalyser = null; }
+  return voiceAudioEl;
+}
+// Phones only allow sound that starts from a tap, so voice chat calls this when the 🎙️ button is tapped.
+const SILENT_MP3 = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//OEwAAAAAAAAAAAAEluZm8AAAAPAAAABwAAA2AAVVVVVVVVVVVVVVVVVVVxcXFxcXFxcXFxcXFxcY6Ojo6Ojo6Ojo6Ojo6Oqqqqqqqqqqqqqqqqqqqqx8fHx8fHx8fHx8fHx8fj4+Pj4+Pj4+Pj4+Pj4///////////////////AAAAAExhdmM2MC4zMQAAAAAAAAAAAAAAACQEIAAAAAAAAANgmVBi7QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//NExAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMu//NExFMAAANIAAAAADEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMu//NExKYAAANIAAAAADEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMu//NExKwAAANIAAAAADEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMu//NExKwAAANIAAAAADEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NExKwAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NExKwAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
+function unlockVoiceAudio() {
+  if (!usingNatural()) return;
+  const a = voiceAudio();
+  voiceAudioCtx?.resume?.();
+  a.src = SILENT_MP3;
+  a.play().catch(() => {});
+}
+async function speakNatural(text, token, onEnd, onWord) {
+  const name = (voicePrefs().name || NATURAL_VOICES[0][0]).replace("azure:", "");
+  const { data, error } = await sb.functions.invoke("tutor-voice", { body: { text: speakable(text), voice: name, rate: voicePrefs().rate || 1 } });
+  if (error || !data?.audio) throw error || new Error(data?.error || "No audio");
+  if (speakingNow !== token) return; // stopped while it was loading
+  const a = voiceAudio();
+  voiceAudioCtx?.resume?.();
+  a.src = `data:${data.type || "audio/mpeg"};base64,${data.audio}`;
+  // Drive the voice orb from how loud the voice is right now.
+  const buf = voiceAnalyser ? new Uint8Array(voiceAnalyser.fftSize) : null;
+  const tick = () => {
+    if (speakingNow !== token || a.paused) return;
+    if (buf) {
+      voiceAnalyser.getByteTimeDomainData(buf);
+      let sum = 0; for (let i = 0; i < buf.length; i++) { const x = (buf[i] - 128) / 128; sum += x * x; }
+      onWord(Math.min(1, Math.sqrt(sum / buf.length) * 5));
+    } else onWord();
+    requestAnimationFrame(tick);
+  };
+  a.onplay = tick;
+  a.onended = () => { if (speakingNow === token) { speakingNow = null; onEnd(); } };
+  a.onerror = () => { if (speakingNow === token) { speakingNow = null; onEnd(); } };
+  await a.play();
+}
+// Reads text aloud: the natural voice if it's chosen and working, otherwise the device's voice.
+function speak(text, onEnd = () => {}, onWord = () => {}) {
+  stopSpeaking();
+  if (!usingNatural()) return speakDevice(text, onEnd, onWord);
+  const token = {};
+  speakingNow = token;
+  speakNatural(text, token, onEnd, onWord).catch((err) => {
+    console.warn("Apex: natural voice unavailable, using the device's voice —", err?.message || err);
+    naturalOff = true;
+    if (speakingNow === token) speakDevice(text, onEnd, onWord);
+  });
+}
 
 // Listens for one thing the student says. onText(final text), onInterim(words so far), onEnd(heardSomething).
 function listenOnce({ onText, onInterim = () => {}, onEnd = () => {}, onError = () => {} }) {
@@ -108,20 +177,21 @@ function voiceSettingsHTML() {
 }
 function fillVoiceSelects() {
   const voices = voiceList.length ? voiceList : loadVoices();
-  const cur = voicePrefs().name || pickVoice()?.name || "";
+  const cur = voicePrefs().name || NATURAL_VOICES[0][0];
   $$("[data-voice-name]").forEach((sel) => {
-    sel.innerHTML = voices.length
-      ? voices.map((v) => `<option value="${esc(v.name)}"${v.name === cur ? " selected" : ""}>${esc(v.name.replace(/\s*\(.*?\)\s*/g, " ").trim())} · ${esc(v.lang)}</option>`).join("")
-      : `<option value="">Your device's default voice</option>`;
+    sel.innerHTML = `<optgroup label="Natural voices (same on every device)">${NATURAL_VOICES.map(([k, l]) => `<option value="${k}"${k === cur ? " selected" : ""}>${esc(l)}</option>`).join("")}</optgroup>
+      <optgroup label="This device's voices">${voices.length
+        ? voices.map((v) => `<option value="${esc(v.name)}"${v.name === cur ? " selected" : ""}>${esc(v.name.replace(/\s*\(.*?\)\s*/g, " ").trim())} · ${esc(v.lang)}</option>`).join("")
+        : `<option value="device">Your device's default voice</option>`}</optgroup>`;
   });
 }
 document.addEventListener("change", (e) => {
   if (!authUser) return;
-  if (e.target.matches("[data-voice-name]")) { store(voicePrefKey(), { ...voicePrefs(), name: e.target.value }); speak("Hi! This is how I'll sound."); }
+  if (e.target.matches("[data-voice-name]")) { store(voicePrefKey(), { ...voicePrefs(), name: e.target.value }); naturalOff = false; unlockVoiceAudio(); speak("Hi! This is how I'll sound."); }
   if (e.target.matches("[data-voice-rate]")) { store(voicePrefKey(), { ...voicePrefs(), rate: +e.target.value }); speak("This is my new speed."); }
 });
 document.addEventListener("click", (e) => {
-  if (e.target.closest("[data-voice-test]")) speak("Hi! I'm your JINtelligence tutor. Ask me anything you're learning.");
+  if (e.target.closest("[data-voice-test]")) { naturalOff = false; unlockVoiceAudio(); speak("Hi! I'm your JINtelligence tutor. Ask me anything you're learning."); }
 });
 
 // How loud the microphone is (0 to 1), for the voice orb. Returns a function that stops it.
