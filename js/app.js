@@ -1416,7 +1416,9 @@ function writingFeedbackPrompt(t, piece) {
   const text = writingText(piece);
   const target = s.target ? ` They were aiming for about ${s.target} words and wrote ${countWords(text)}.` : "";
   if (t.special === "creative-writing") {
-    return `You are an English teacher marking a piece of creative writing. The writing prompt was: "${piece.prompt}".${target}
+    const g = NARRATIVE_GENRES[s.genre];
+    return `You are an English teacher marking a piece of creative writing. The writing prompt was: "${piece.prompt}".${target}${g ? `
+This is a ${g.label.toLowerCase()}. As well as the points below, comment on how well it uses the features of a ${g.label.toLowerCase()}: ${g.features}. Say which features they used well and one they could add or strengthen.` : ""}
 
 Here is the student's writing:
 """
@@ -1639,9 +1641,9 @@ function pageWriting(view, t) {
     $$("input[type=number]", root).forEach((el) => el.addEventListener("input", readSettings));
     readSettings();
 
-    const start = (prompt) => {
+    const start = (prompt, extra = {}) => {
       readSettings();
-      const s = { ...settings };
+      const s = { ...settings, ...extra };
       const piece = {
         id: newId(), topicId: t.id, prompt, settings: s, plan: {}, feedback: "",
         stage: s.planMinutes ? "plan" : "write", createdAt: new Date().toISOString(),
@@ -1652,6 +1654,7 @@ function pageWriting(view, t) {
       if (isEssay && s.essayType === "discussion") piece.settings.side = "both";
       open(piece, { isNew: true });
     };
+    startPiece = start;
     $$(".prompt-list button", root).forEach((b) => b.addEventListener("click", () => start(t.prompts[+b.dataset.i])));
     $("#own-go", root).addEventListener("click", () => {
       const p = $("#own-prompt", root).value.trim();
@@ -2104,8 +2107,108 @@ Tutor:`;
     }));
   }
 
+  let startPiece = null;
   refreshCount();
   setup();
+  // Started from Test → Writing test: jump straight into the piece.
+  const w = pendingWritingTest;
+  pendingWritingTest = null;
+  if (w && w.special === t.special && startPiece) startPiece(w.prompt, w.settings);
+}
+
+// ---------------- Writing test ----------------
+// A timed persuasive essay on any topic, or a narrative in a chosen genre. It opens in the writing practice
+// pages (plan → write → AI feedback), with the topic and genre already set.
+let pendingWritingTest = null;
+const NARRATIVE_GENRES = {
+  fairy: { label: "Fairy tale", icon: "🧚", features: "a 'once upon a time' style opening, a magical world, a clear hero and villain, magic or enchanted objects, things in threes, a test or quest, and a happy ending or lesson",
+    prompts: ["A kind servant finds a talking key that opens any door — except one.", "A princess must outwit a giant who has stolen the kingdom's sunlight.", "Three siblings each get one wish from a fallen star."] },
+  fable: { label: "Fable", icon: "🦊", features: "animal characters with human traits, a short simple plot, a clear conflict between characters, and a moral stated at the end",
+    prompts: ["A boastful magpie and a patient tortoise enter a building contest.", "A greedy crow finds a shiny coin and won't share it.", "A tiny ant saves a lion — write the fable and its moral."] },
+  myth: { label: "Myth or legend", icon: "⚡", features: "gods, heroes or supernatural beings, an explanation of how something in nature came to be, a heroic quest, and a sense of ancient times",
+    prompts: ["Write a myth explaining why the ocean is salty.", "A young hero must climb the mountain where the thunder is made.", "Write a legend about how the first fire was stolen from the sky."] },
+  adventure: { label: "Adventure", icon: "🗺️", features: "a quest or journey, danger and obstacles, fast-paced action, rising tension, a brave main character and an exciting climax",
+    prompts: ["Your raft drifts down a river into a jungle no map shows.", "A storm strands your school camp on an island with a secret.", "You find a treasure map hidden inside a library book."] },
+  mystery: { label: "Mystery", icon: "🔍", features: "a puzzle or crime, clues and red herrings, suspense, a detective or curious main character, and a satisfying reveal that makes sense",
+    prompts: ["Every night, one item in the school museum moves to a new spot.", "The class pet goes missing during the school concert.", "A message appears on the fogged-up bus window: 'Don't get off at the next stop.'"] },
+  fantasy: { label: "Fantasy", icon: "🐉", features: "a magical world with its own rules, magical creatures or powers, a hero's quest, and a battle between good and evil",
+    prompts: ["You discover you can talk to dragons — but only on Tuesdays.", "A door in your wardrobe leads to a city floating in the clouds.", "The last apprentice at a forgotten magic school must save it from closing."] },
+  scifi: { label: "Science fiction", icon: "🚀", features: "future technology or science, space, robots or time travel, a 'what if?' idea, and how the technology affects people",
+    prompts: ["The year is 2150 and your robot best friend has started dreaming.", "You wake up on a spaceship with no memory of boarding it.", "A time machine lets you visit any day — but only for one hour."] },
+  spooky: { label: "Spooky story", icon: "👻", features: "an eerie setting, suspense that builds slowly, unexplained events, short tense sentences at key moments, and a twist or chilling ending (keep it school-appropriate)",
+    prompts: ["The old house at the end of the street has a light on again.", "Your reflection in the mirror is a second too slow.", "At camp, a voice on the walkie-talkie knows everyone's name."] },
+  realistic: { label: "Realistic fiction", icon: "🏡", features: "believable characters and settings, everyday problems, realistic dialogue, and a character who grows or changes",
+    prompts: ["Your best friend is moving interstate in one week.", "You're picked to be captain, but your friend wanted it more.", "A new student sits alone at lunch every day."] },
+  historical: { label: "Historical fiction", icon: "🏛️", features: "a real time and place in history, accurate historical details, characters affected by real events, and language that fits the time",
+    prompts: ["You're a child arriving in Victoria during the 1850s gold rush.", "A message must get through during a long journey in ancient Rome.", "You're a young apprentice on Captain Cook's ship in 1770."] },
+  comedy: { label: "Funny story", icon: "😂", features: "funny characters and situations, exaggeration, misunderstandings, good comic timing, and a playful or surprising ending",
+    prompts: ["Your dog accidentally becomes the school principal for a day.", "You swap bodies with your teacher on the morning of a test.", "Grandma enters a skateboarding competition — and wins."] },
+};
+const PERSUASIVE_TOPICS = [
+  "Students should not have homework.", "School should start at 10 am.", "Mobile phones should be banned at school.", "Every student should learn a second language.",
+  "Junk food ads should be banned on kids' TV.", "Zoos should be closed.", "Students should be paid for good grades.", "School uniforms should be optional.",
+  "Video games are good for young people.", "Australia should ban single-use plastic.", "The school week should be four days.", "Kids under 14 shouldn't have social media.",
+  "Sport should be compulsory every day.", "Pets should be allowed at school.", "Year 7s should choose all their own subjects.", "Space exploration is worth the cost.",
+];
+function writingTestMode(view, host) {
+  let kind = "persuasive", genre = "fairy";
+  const draw = () => {
+    const g = NARRATIVE_GENRES[genre];
+    host.innerHTML = `
+      <div class="card stack">
+        <p class="muted small" style="margin:0;">A timed writing test: plan, write, then get AI feedback on your work. You can change the time and length on the next screen.</p>
+        <div class="segmented" id="wt-kind">
+          <button type="button" data-kind="persuasive" class="${kind === "persuasive" ? "active" : ""}">📣 Persuasive essay</button>
+          <button type="button" data-kind="narrative" class="${kind === "narrative" ? "active" : ""}">📖 Narrative</button>
+        </div>
+        ${kind === "persuasive" ? `
+          <div>
+            <label class="field" for="wt-topic">Your topic — anything you like</label>
+            <div class="row" style="flex-wrap:nowrap;">
+              <input type="text" id="wt-topic" maxlength="200" placeholder="e.g. Students should not have homework">
+              <button class="btn secondary" type="button" id="wt-random" title="Give me a topic">🎲</button>
+            </div>
+            <p class="muted small" style="margin:6px 0 0;">Write it as a statement to argue for or against. You'll pick your side next and get evidence for both sides.</p>
+          </div>
+          <div class="chips wt-ideas">${PERSUASIVE_TOPICS.slice().sort(() => Math.random() - 0.5).slice(0, 4).map((x) => `<button type="button" class="btn secondary sm" data-topic="${esc(x)}">${esc(x)}</button>`).join("")}</div>`
+        : `
+          <div>
+            <label class="field">Type of narrative</label>
+            <div class="genre-grid">${Object.entries(NARRATIVE_GENRES).map(([k, v]) => `<button type="button" class="genre-btn${k === genre ? " active" : ""}" data-genre="${k}" aria-pressed="${k === genre}"><span>${v.icon}</span>${esc(v.label)}</button>`).join("")}</div>
+            <p class="muted small" style="margin:8px 0 0;"><b>What to include in a ${esc(g.label.toLowerCase())}:</b> ${esc(g.features)}.</p>
+          </div>
+          <div>
+            <label class="field">Pick a prompt</label>
+            <div class="prompt-list">${g.prompts.map((x) => `<button type="button" data-topic="${esc(x)}">${esc(x)}</button>`).join("")}</div>
+          </div>
+          <div>
+            <label class="field" for="wt-topic">Or write your own idea</label>
+            <input type="text" id="wt-topic" maxlength="200" placeholder="Your own ${esc(g.label.toLowerCase())} idea…">
+          </div>`}
+        <button class="btn" type="button" id="wt-start">Start writing →</button>
+      </div>`;
+    $$("[data-kind]", host).forEach((b) => b.addEventListener("click", () => { kind = b.dataset.kind; draw(); }));
+    $$("[data-genre]", host).forEach((b) => b.addEventListener("click", () => { genre = b.dataset.genre; draw(); }));
+    $("#wt-random", host)?.addEventListener("click", () => { $("#wt-topic", host).value = PERSUASIVE_TOPICS[Math.floor(Math.random() * PERSUASIVE_TOPICS.length)]; });
+    $$("[data-topic]", host).forEach((b) => b.addEventListener("click", () => go(b.dataset.topic)));
+    $("#wt-start", host).addEventListener("click", () => {
+      const topic = $("#wt-topic", host).value.trim();
+      if (kind === "persuasive" && !topic) return toast("Type a topic, or tap 🎲 for one.");
+      go(topic || g.prompts[Math.floor(Math.random() * g.prompts.length)]);
+    });
+    $("#wt-topic", host)?.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#wt-start", host).click(); });
+  };
+  const go = (topic) => {
+    if (kind === "persuasive") {
+      pendingWritingTest = { special: "essay-writing", prompt: topic, settings: { essayType: "persuasive" } };
+      goTo("#/practice/eng-essay");
+    } else {
+      const g = NARRATIVE_GENRES[genre];
+      pendingWritingTest = { special: "creative-writing", prompt: `${g.label}: ${topic}`, settings: { genre } };
+      goTo("#/practice/eng-creative");
+    }
+  };
+  draw();
 }
 
 // ---------------- Test ----------------
@@ -2119,6 +2222,7 @@ const TEST_MODES = [
   { id: "cards", icon: "🃏", name: "Flashcards" },
   { id: "info", icon: "💡", name: "Info & ideas" },
   { id: "public", icon: "🌍", name: "Public tests" },
+  { id: "writing", icon: "✍️", name: "Writing test" },
 ];
 let switchStudyMode = null; // set while the Test page is showing
 
@@ -2136,7 +2240,7 @@ function pageTest(view, arg, focusId) {
     testMode = id;
     $$("#t-mode .mode-btn", view).forEach((b) => { const on = b.dataset.mode === id; b.classList.toggle("active", on); b.setAttribute("aria-selected", String(on)); });
     host.innerHTML = "";
-    ({ pick: pickBuilder, chat: aiTestMode, cards: flashcardsMode, info: infoMode, public: (v, h) => publicTestsMode(v, h, focusId) })[id](view, host);
+    ({ pick: pickBuilder, chat: aiTestMode, cards: flashcardsMode, info: infoMode, public: (v, h) => publicTestsMode(v, h, focusId), writing: writingTestMode })[id](view, host);
   };
   switchStudyMode = openMode;
   $$("#t-mode .mode-btn", view).forEach((b) => b.addEventListener("click", () => openMode(b.dataset.mode)));
