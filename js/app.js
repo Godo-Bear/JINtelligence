@@ -2880,6 +2880,7 @@ function pageTutor(view) {
   const endVoice = () => {
     tutorVoice = false;
     cancelAnimationFrame(orbFrame);
+    window.removeEventListener("voice-failed", onVoiceFailed);
     stopMic?.(); stopMic = null;
     document.body.classList.remove("voice-open");
     stopListen?.(); stopListen = null;
@@ -2888,6 +2889,9 @@ function pageTutor(view) {
     $("#t-voice", view).classList.remove("on");
   };
   cleanup = endVoice; // leaving the page stops listening and talking
+  // No voice could play on this device: say so, and keep the conversation going with captions.
+  const onVoiceFailed = () => { if (tutorVoice) toast("🔇 This device couldn't play a voice — check your volume, or try Chrome or Edge. The tutor's replies show as captions."); };
+  window.addEventListener("voice-failed", onVoiceFailed);
   $("#t-voice", view).addEventListener("click", () => {
     if (tutorVoice) return endVoice();
     if (!canListen) return toast("Voice chat needs Chrome, Edge or Safari. You can still type to the tutor.");

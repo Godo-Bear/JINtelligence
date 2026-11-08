@@ -29,13 +29,15 @@ function voiceScore(v) {
   if (/^google/i.test(v.name)) s += 20;                                         // Chrome's Google voices
   if (/en[-_]AU/i.test(v.lang)) s += 6; else if (/en[-_]GB/i.test(v.lang)) s += 4; else if (/en[-_]US/i.test(v.lang)) s += 3;
   if (/william|daniel|lee|gordon|ryan|guy|christopher|eric|andrew|brian|male/i.test(v.name)) s += 2; // a calm male voice, like the video ad
-  if (v.localService === false) s += 1;
+  if (v.localService !== false) s += 12; // installed on the device: works offline and on school networks
   if (ROBOTIC.test(v.name)) s -= 100;
+  if (badVoices.has(v.name)) s -= 1000;   // didn't play last time
   return s;
 }
+const badVoices = new Set(); // voices that didn't play on this visit
 function pickVoice() {
   const voices = voiceList.length ? voiceList : loadVoices();
-  const chosen = voices.find((v) => v.name === voicePrefs().name);
+  const chosen = voices.find((v) => v.name === voicePrefs().name && !badVoices.has(v.name));
   if (chosen) return chosen;
   return voices.slice().sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
 }
@@ -54,28 +56,45 @@ function speakable(text) {
 let speakingNow = null;
 function speakDevice(text, onEnd = () => {}, onWord = () => {}) {
   if (!canSpeak) { onEnd(); return; }
-  speechSynthesis.cancel();
   // Long replies are split into sentences — some browsers stop speaking long text part-way.
   const parts = speakable(text).match(/[^.!?]+[.!?]*/g) || [];
   if (!parts.length) { onEnd(); return; }
-  const voice = pickVoice(), rate = voicePrefs().rate || 1;
-  let i = 0, stopped = false;
+  let voice = pickVoice(), i = 0, stopped = false, tries = 0, heard = false;
+  const rate = voicePrefs().rate || 1;
   const token = {};
   speakingNow = token;
+  const finish = () => { if (speakingNow === token) speakingNow = null; clearInterval(keepAlive); onEnd(); };
+  // Chrome pauses speech after about 15 seconds; nudging it keeps it going.
+  const keepAlive = setInterval(() => { if (speakingNow !== token) return clearInterval(keepAlive); if (speechSynthesis.speaking && !speechSynthesis.paused) { speechSynthesis.pause(); speechSynthesis.resume(); } }, 10000);
   const next = () => {
     if (stopped || speakingNow !== token) return;
-    if (i >= parts.length) { speakingNow = null; onEnd(); return; }
-    const u = new SpeechSynthesisUtterance(parts[i++].trim());
+    if (i >= parts.length) return finish();
+    const u = new SpeechSynthesisUtterance(parts[i].trim());
     if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = "en-AU";
     u.rate = rate;
-    u.onstart = onWord;
+    u.volume = 1;
+    let done = false, started = false;
+    // If a voice doesn't start (blocked online voice, stuck engine), switch to another one and try again.
+    const failed = () => {
+      if (done) return;
+      done = true;
+      if (voice) badVoices.add(voice.name);
+      speechSynthesis.cancel();
+      if (++tries > 2) { if (!heard) window.dispatchEvent(new CustomEvent("voice-failed")); return finish(); }
+      voice = tries === 2 ? null : pickVoice(); // last try: the browser's default voice
+      setTimeout(next, 120);
+    };
+    u.onstart = () => { started = true; heard = true; onWord(); };
     u.onboundary = onWord; // each word — makes the voice orb pulse
-    u.onend = next;
-    u.onerror = next;
+    u.onend = () => { if (done) return; if (!started && !heard) return failed(); done = true; i++; next(); };
+    u.onerror = (e) => { if (e.error === "interrupted" || e.error === "canceled") { done = true; return; } failed(); };
     speechSynthesis.speak(u);
+    setTimeout(() => { if (!started && !done && speakingNow === token) failed(); }, i === 0 ? 3000 : 6000);
   };
-  next();
-  return () => { stopped = true; speakingNow = null; speechSynthesis.cancel(); };
+  // Chrome can drop speech that's queued straight after cancel(), so wait a moment first.
+  speechSynthesis.cancel();
+  setTimeout(next, 120);
+  return () => { stopped = true; speakingNow = null; clearInterval(keepAlive); speechSynthesis.cancel(); };
 }
 function stopSpeaking() {
   speakingNow = null;
@@ -105,6 +124,14 @@ function voiceAudio() {
 // Phones only allow sound that starts from a tap, so voice chat calls this when the 🎙️ button is tapped.
 const SILENT_MP3 = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//OEwAAAAAAAAAAAAEluZm8AAAAPAAAABwAAA2AAVVVVVVVVVVVVVVVVVVVxcXFxcXFxcXFxcXFxcY6Ojo6Ojo6Ojo6Ojo6Oqqqqqqqqqqqqqqqqqqqqx8fHx8fHx8fHx8fHx8fj4+Pj4+Pj4+Pj4+Pj4///////////////////AAAAAExhdmM2MC4zMQAAAAAAAAAAAAAAACQEIAAAAAAAAANgmVBi7QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//NExAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMu//NExFMAAANIAAAAADEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMu//NExKYAAANIAAAAADEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMu//NExKwAAANIAAAAADEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMu//NExKwAAANIAAAAADEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NExKwAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NExKwAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
 function unlockVoiceAudio() {
+  if (canSpeak) {
+    try {
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0;
+      speechSynthesis.speak(u);
+      speechSynthesis.resume();
+    } catch (e) { /* nothing to unlock */ }
+  }
   if (!usingNatural()) return;
   const a = voiceAudio();
   voiceAudioCtx?.resume?.();
