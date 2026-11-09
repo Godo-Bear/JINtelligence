@@ -3080,6 +3080,69 @@ function pageProgress(view) {
 }
 
 // ---------------- Settings ----------------
+// Admin: fix a student's login — correct a misspelt email and/or set a temporary password.
+// Passwords can't be seen by anyone; the admin sets a new one and tells the student.
+// Uses the "admin-account" edge function (supabase/functions/admin-account), which checks you're an admin.
+function openFixLogin(a, redraw) {
+  const temp = () => `${["Maroon", "Rocket", "Tiger", "Comet", "Koala", "Pixel", "Ocean", "Maple"][Math.floor(Math.random() * 8)]}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const box = document.createElement("div");
+  box.className = "modal";
+  box.innerHTML = `<div class="card stack" role="dialog" aria-label="Fix login">
+    <h3 style="margin:0;">🔑 Fix login for ${esc(a.username || a.email)}</h3>
+    <p class="muted small" style="margin:0;">Nobody can see passwords — they're scrambled. You can fix their email and give them a new temporary password instead. Their points and progress stay the same.</p>
+    <div><label class="field" for="fl-email">Email they log in with</label>
+      <input type="email" id="fl-email" value="${esc(a.email || "")}" autocomplete="off"></div>
+    <label class="small" style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="fl-setpw" checked> Set a new temporary password</label>
+    <div id="fl-pw-row"><label class="field" for="fl-pw">Temporary password</label>
+      <div class="row" style="flex-wrap:nowrap;"><input type="text" id="fl-pw" value="${temp()}" autocomplete="off" minlength="6">
+      <button class="btn secondary" type="button" id="fl-new" title="Make another">🎲</button></div></div>
+    <div class="error hidden" id="fl-err"></div>
+    <div class="row" style="justify-content:flex-end;"><button class="btn ghost" type="button" data-close>Cancel</button><button class="btn" type="button" id="fl-go">Save</button></div>
+  </div>`;
+  document.body.appendChild(box);
+  const close = () => box.remove();
+  box.addEventListener("click", (e) => { if (e.target === box || e.target.closest("[data-close]")) close(); });
+  $("#fl-new", box).addEventListener("click", () => { $("#fl-pw", box).value = temp(); });
+  $("#fl-setpw", box).addEventListener("change", (e) => $("#fl-pw-row", box).classList.toggle("hidden", !e.target.checked));
+  $("#fl-go", box).addEventListener("click", async () => {
+    const err = $("#fl-err", box), go = $("#fl-go", box);
+    hide(err);
+    const email = $("#fl-email", box).value.trim().toLowerCase();
+    const password = $("#fl-setpw", box).checked ? $("#fl-pw", box).value.trim() : "";
+    const body = { userId: a.id };
+    if (email && email !== (a.email || "").toLowerCase()) body.email = email;
+    if (password) body.password = password;
+    if (!body.email && !body.password) return setMsg(err, "Change the email or set a password first.", "error");
+    if (password && password.length < 6) return setMsg(err, "The password needs at least 6 characters.", "error");
+    go.disabled = true; go.textContent = "Saving…";
+    try {
+      const { data, error } = await sb.functions.invoke("admin-account", { body });
+      if (error) {
+        let msg = "";
+        try { msg = (await error.context?.json?.())?.error || ""; } catch (e) { /* no details */ }
+        if (!msg && /404|not found|Failed to send/i.test(`${error.context?.status || ""} ${error.message}`)) msg = "The admin-account function isn't set up in Supabase yet.";
+        throw new Error(msg || error.message);
+      }
+      if (data?.error) throw new Error(data.error);
+      if (body.email) a.email = body.email;
+      const loginEmail = body.email || a.email;
+      box.querySelector(".card").innerHTML = `
+        <h3 style="margin:0;">✅ Login fixed</h3>
+        <p style="margin:0;">Tell ${esc(a.username || "them")} to log in with:</p>
+        <div class="fl-result"><div><span class="muted small">Email</span><b>${esc(loginEmail)}</b></div>${password ? `<div><span class="muted small">Temporary password</span><b>${esc(password)}</b></div>` : ""}</div>
+        ${password ? `<p class="muted small" style="margin:0;">Ask them to change it straight away in ⚙️ Settings → New password.</p>` : ""}
+        <div class="row" style="justify-content:flex-end;"><button class="btn secondary" type="button" id="fl-copy">Copy</button><button class="btn" type="button" data-close>Done</button></div>`;
+      $("#fl-copy", box).addEventListener("click", () => {
+        navigator.clipboard?.writeText(`Log in to JINtelligence with\nEmail: ${loginEmail}${password ? `\nTemporary password: ${password}\nThen change your password in Settings.` : ""}`).then(() => toast("Copied!"), () => toast("Couldn't copy — write it down instead."));
+      });
+      redraw?.();
+    } catch (e) {
+      go.disabled = false; go.textContent = "Save";
+      setMsg(err, e.message || "Something went wrong.", "error");
+    }
+  });
+}
+
 function pageSettings(view) {
   const until = me.paidUntil ? new Date(me.paidUntil) : null;
   const daysLeft = until ? Math.ceil((until - new Date()) / 86400000) : null;
@@ -3409,6 +3472,7 @@ function pageAdmin(view) {
           ${open.has(a.id) ? `
             <div class="row" style="flex-basis:100%; gap:6px;">
               ${btn("give", giving.has(a.id) ? "Close gifts" : "🎁 Give / take", "")}
+              ${btn("fix-login", "🔑 Fix login")}
               ${btn("add-points", "+10 pts")}${btn("set-points", "Set pts…")}
               ${btn("add-xp", "+10 XP")}${btn("set-xp", "Set XP…")}
               ${btn("renew", "Renew 6 months")}
@@ -3491,6 +3555,7 @@ function pageAdmin(view) {
     if (!btn) return;
     const a = accounts.find((x) => x.id === btn.dataset.id);
     if (btn.dataset.act === "give") { giving.has(a.id) ? giving.delete(a.id) : giving.add(a.id); return drawAccounts(); }
+    if (btn.dataset.act === "fix-login") return openFixLogin(a, drawAccounts);
     const name = a.username || a.email;
     // Your own row may be stale if you've practised since this page loaded.
     if (a.id === authUser.id) { a.points = me.points; a.xp = me.xp; }
