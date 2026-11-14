@@ -544,6 +544,26 @@ $("#paywall-recheck").addEventListener("click", async () => {
   else showAuthPanel("main");
 });
 
+// Starts an online card payment (Stripe Checkout) via the "create-checkout-session" edge function.
+// Needs the site owner's own Stripe setup to actually work — see the setup notes — and fails politely
+// (rather than breaking anything) if that hasn't been done yet.
+async function startCheckout(btn, statusEl) {
+  btn.disabled = true;
+  statusEl.textContent = "";
+  try {
+    const { data, error } = await sb.functions.invoke("create-checkout-session", { body: { origin: location.origin } });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    if (!data?.url) throw new Error("No checkout link was returned.");
+    window.location.href = data.url;
+    return; // leaving the page — no need to re-enable the button
+  } catch (e) {
+    statusEl.textContent = e.message || "Couldn't start checkout — try again, or pay cash in hand.";
+  }
+  btn.disabled = false;
+}
+$("#paywall-pay-btn").addEventListener("click", () => startCheckout($("#paywall-pay-btn"), $("#paywall-pay-status")));
+
 async function handleAuthenticatedUser(user) {
   authUser = { id: user.id, email: user.email };
   let { data: profile, error } = await sb.from("profiles")
@@ -3352,6 +3372,10 @@ function pageSettings(view) {
     <div class="card stack">
       <p style="margin:0;">${subText}</p>
       <p class="muted small" style="margin:0;">To renew, pay <strong>$10 cash in hand</strong> to the site owner for another 6 months. Accounts are unlocked by hand, so it may take a while.</p>
+      <div class="row" style="flex-wrap:nowrap; align-items:center;">
+        <button class="btn secondary" id="pay-online-btn">💳 Pay online with card</button>
+        <span class="small muted" id="pay-online-status"></span>
+      </div>
     </div>
 
     <div class="section-label">Your level</div>
@@ -3476,6 +3500,8 @@ function pageSettings(view) {
     $("#set-pass", view).value = "";
     toast("Password changed");
   });
+
+  $("#pay-online-btn", view)?.addEventListener("click", () => startCheckout($("#pay-online-btn", view), $("#pay-online-status", view)));
 
   $("#set-join-btn", view)?.addEventListener("click", async () => {
     const btn = $("#set-join-btn", view), status = $("#set-join-status", view);
