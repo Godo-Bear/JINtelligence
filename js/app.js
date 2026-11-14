@@ -90,8 +90,10 @@ const NAV = [
 YEAR_LEVELS.forEach((y) => y.topics.forEach((t) => { t.subject = "maths"; t.yearId = y.id; }));
 ENGLISH_TOPICS.forEach((t) => { t.subject = "english"; });
 SCIENCE_TOPICS.forEach((t) => { t.subject = "science"; });
+HISTORY_TOPICS.forEach((t) => { t.subject = "history"; });
+GEOGRAPHY_TOPICS.forEach((t) => { t.subject = "geography"; });
 const MATHS_TOPICS = YEAR_LEVELS.flatMap((y) => y.topics);
-const ALL_TOPICS = [...MATHS_TOPICS, ...ENGLISH_TOPICS, ...SCIENCE_TOPICS];
+const ALL_TOPICS = [...MATHS_TOPICS, ...ENGLISH_TOPICS, ...SCIENCE_TOPICS, ...HISTORY_TOPICS, ...GEOGRAPHY_TOPICS];
 const QUIZ_TOPICS = ALL_TOPICS.filter((t) => !t.special);
 const findTopic = (id) => ALL_TOPICS.find((t) => t.id === id);
 
@@ -955,6 +957,10 @@ function pagePractice(view, topicId) {
     <div class="grid topics">${ENGLISH_TOPICS.map(topicCard).join("")}</div>
     <div class="section-label">Science</div>
     <div class="grid topics">${SCIENCE_TOPICS.map(topicCard).join("")}</div>
+    <div class="section-label">History</div>
+    <div class="grid topics">${HISTORY_TOPICS.map(topicCard).join("")}</div>
+    <div class="section-label">Geography</div>
+    <div class="grid topics">${GEOGRAPHY_TOPICS.map(topicCard).join("")}</div>
   `;
 }
 
@@ -2276,6 +2282,14 @@ function pickBuilder(view, host) {
       <div>
         <div class="row between"><label class="field">Science topics</label><button class="btn ghost sm" data-all="science">Select all</button></div>
         <div class="checklist" data-group="science">${checklist(SCIENCE_TOPICS)}</div>
+      </div>
+      <div>
+        <div class="row between"><label class="field">History topics</label><button class="btn ghost sm" data-all="history">Select all</button></div>
+        <div class="checklist" data-group="history">${checklist(HISTORY_TOPICS)}</div>
+      </div>
+      <div>
+        <div class="row between"><label class="field">Geography topics</label><button class="btn ghost sm" data-all="geography">Select all</button></div>
+        <div class="checklist" data-group="geography">${checklist(GEOGRAPHY_TOPICS)}</div>
       </div>
       <div>
         <label class="field">Difficulty</label>
