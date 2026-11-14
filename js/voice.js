@@ -264,3 +264,40 @@ function startMicLevel(onLevel) {
   }).catch(() => { /* no mic level — the orb still animates */ });
   return () => { stopped = true; cancelAnimationFrame(frame); stream?.getTracks().forEach((t) => t.stop()); ctx?.close?.(); onLevel(0); };
 }
+
+// ---------------------------------------------------------------- Read a question aloud
+// A 🔊 button on every question (next to ☆ Flag), reading the passage, prompt, visual description and
+// multiple-choice options aloud with the tutor's voice. Tap it again (or tap another question) to stop.
+const speakRegistry = new Map();
+function speakButtonHTML(q) {
+  if (!q?.prompt || !canSpeak) return "";
+  const key = flagKey(q);
+  speakRegistry.set(key, q);
+  return `<button type="button" class="q-speak" data-speak-q="${esc(key)}" aria-label="Read this question aloud" title="Read this question aloud">🔊</button>`;
+}
+function questionSpeakText(q) {
+  const passage = q.passage ? `${q.passage}. ` : "";
+  const vis = q.visual && typeof describeVisual === "function" ? `${describeVisual(q.visual)}. ` : "";
+  const opts = q.options ? ` Choices: ${q.options.join(". ")}.` : "";
+  return `${passage}${vis}${q.prompt}${opts}`;
+}
+let readingKey = null;
+function setReadingUI(key) {
+  readingKey = key;
+  document.querySelectorAll("[data-speak-q]").forEach((b) => {
+    const on = b.dataset.speakQ === key;
+    b.textContent = on ? "⏹️" : "🔊";
+    b.classList.toggle("on", on);
+  });
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-speak-q]");
+  if (!btn) return;
+  e.preventDefault();
+  const key = btn.dataset.speakQ;
+  if (readingKey === key) { stopSpeaking(); setReadingUI(null); return; }
+  const q = speakRegistry.get(key);
+  if (!q) return;
+  setReadingUI(key);
+  speak(questionSpeakText(q), () => { if (readingKey === key) setReadingUI(null); });
+});

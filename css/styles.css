@@ -1319,9 +1319,13 @@ body::before {
 }
 
 /* Flag any question */
-.q-flag { float: right; margin: 0 0 6px 8px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.q-tools-top { float: right; display: flex; gap: 6px; margin: 0 0 6px 8px; }
+.q-flag { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .q-flag:hover { border-color: var(--accent); color: var(--accent); }
 .q-flag.on { background: #FFF4D6; border-color: #E8B931; color: #7A5600; }
+.q-speak { width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--muted); font-size: 12px; cursor: pointer; display: grid; place-items: center; }
+.q-speak:hover { border-color: var(--accent); color: var(--accent); }
+.q-speak.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 :root[data-theme="dark"] .q-flag.on { background: #3A2E12; border-color: #B8922A; color: #F2D27A; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .q-flag.on { background: #3A2E12; border-color: #B8922A; color: #F2D27A; } }
 
