@@ -1384,3 +1384,6 @@ body.voice-open { overflow: hidden; }
 
 /* Today's review card */
 .review-card .emoji { font-size: 28px; }
+
+/* Weak spots */
+.diff-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }

@@ -2985,6 +2985,40 @@ function pageTutor(view) {
 }
 
 // ---------------- Progress ----------------
+// The topics you've tried at least 3 times, weakest mastery first. `byDiff` (recorded in recordResults)
+// gives a quick Easy/Medium/Hard read-out per topic when it's there.
+function weakTopics(limit = 5) {
+  return QUIZ_TOPICS.filter((t) => topicStats(t.id).attempted >= 3).sort((a, b) => mastery(a.id) - mastery(b.id)).slice(0, limit);
+}
+function weakSpotsHTML() {
+  const weak = weakTopics();
+  if (!weak.length) return `<p class="muted small" style="margin:0;">Practise a topic a few times and your weakest spots will show up here.</p>`;
+  const diffDots = (tp) => {
+    const bd = topicStats(tp.id).byDiff || {};
+    return [1, 2, 3].map((d) => {
+      const s = bd[d];
+      const pct = s?.attempted ? Math.round((s.correct / s.attempted) * 100) : null;
+      return `<span class="diff-dot" style="${pct === null ? "opacity:.3;" : `background:${pct >= 70 ? "var(--accent)" : pct >= 40 ? "#E3963E" : "#D93A3A"};`}" title="${DIFF_NAMES[d]}${pct === null ? ": not tried" : `: ${pct}%`}"></span>`;
+    }).join("");
+  };
+  return `
+    <div class="weak-list">${weak.map((tp) => `
+      <div class="mastery-row">
+        <a href="#/practice/${tp.id}" style="color:inherit; text-decoration:none;">${tp.icon} ${esc(tp.name)}</a>
+        <div class="row" style="gap:3px; justify-content:center;">${diffDots(tp)}</div>
+        <span class="pct">${mastery(tp.id)}%</span>
+      </div>`).join("")}</div>
+    ${weak.length >= 2 ? `<button class="btn secondary sm" type="button" id="weak-mix" style="margin-top:10px;">📋 Mixed practice of your ${Math.min(3, weak.length)} weakest</button>` : ""}`;
+}
+function wireWeakSpots(view) {
+  $("#weak-mix", view)?.addEventListener("click", () => {
+    const topics = weakTopics(3);
+    const pool = topics.flatMap((tp) => tp.questions.map((q) => ({ q, topic: tp })));
+    if (!pool.length) return toast("No questions to practise in these topics yet.");
+    runTest(view, shuffle(pool).slice(0, 10), 0, { again: "Back to Progress", againHref: "#/progress" });
+  });
+}
+
 function pageProgress(view) {
   const t = totals();
   view.innerHTML = `
@@ -3008,6 +3042,9 @@ function pageProgress(view) {
         </div>`;
       }).join("")}
     </div>
+
+    <div class="section-label">🎯 Weak spots</div>
+    <div class="card" id="weak-spots">${weakSpotsHTML()}</div>
 
     <div class="section-label">Mastery by topic</div>
     <div class="card">
@@ -3036,6 +3073,7 @@ function pageProgress(view) {
       <div id="lb"><p class="muted">Loading…</p></div>
     </div>`;
 
+  wireWeakSpots(view);
   let mode = "all";
   let rows = [];
   $$("#lb-mode button", view).forEach((b) => b.addEventListener("click", () => {
