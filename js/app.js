@@ -384,9 +384,14 @@ $$("[data-auth-mode]").forEach((btn) => btn.addEventListener("click", () => {
   const signup = authMode === "signup";
   $("#auth-name-field").classList.toggle("hidden", !signup);
   $("#auth-terms-field").classList.toggle("hidden", !signup);
+  $("#auth-age-field").classList.toggle("hidden", !signup);
   $("#auth-submit").textContent = signup ? "Create account" : "Log in";
   $("#auth-password").autocomplete = signup ? "new-password" : "current-password";
   hide($("#auth-msg"));
+}));
+
+$$('input[name="auth-age"]').forEach((r) => r.addEventListener("change", () => {
+  $("#auth-parent-field").classList.toggle("hidden", !$("#auth-age-under").checked);
 }));
 
 $("#auth-form").addEventListener("submit", async (e) => {
@@ -401,6 +406,9 @@ $("#auth-form").addEventListener("submit", async (e) => {
   if (authMode === "signup") {
     if (name.length < 3) return setMsg(msg, "Display name needs at least 3 characters.", "error");
     if (!$("#auth-terms").checked) return setMsg(msg, "Please agree to the Terms & Conditions.", "error");
+    if ($("#auth-age-under").checked && !$("#auth-parent-consent").checked) {
+      return setMsg(msg, "A parent or guardian needs to agree on your behalf — please tick the box.", "error");
+    }
   }
 
   btn.disabled = true;
@@ -3315,8 +3323,9 @@ function pageSettings(view) {
     <div class="card stack">
       <div class="row">
         <button class="btn secondary" data-open="terms">📄 Terms and Conditions</button>
-        <button class="btn ghost" id="req-delete">Request account deletion</button>
+        <button class="btn secondary" data-open="privacy">🔒 Privacy Policy</button>
       </div>
+      <button class="btn ghost" id="req-delete" style="align-self:flex-start; color:var(--bad);">🗑️ Delete my account</button>
       <button class="btn secondary" id="set-logout" style="align-self:flex-start;">⏻ Log out</button>
     </div>`;
 
@@ -3388,11 +3397,20 @@ function pageSettings(view) {
   $("#set-fb-send", view).addEventListener("click", () => sendFeedback($("#set-fb-category", view), $("#set-fb-message", view), $("#set-fb-send", view), fbList));
   loadMyFeedback(fbList);
 
-  $("#req-delete", view).addEventListener("click", () => {
-    $("#set-fb-category", view).value = "other";
-    $("#set-fb-message", view).value = "Please delete my account and data.";
-    $("#set-feedback", view).scrollIntoView({ behavior: "smooth", block: "center" });
-    $("#set-fb-message", view).focus({ preventScroll: true });
+  $("#req-delete", view).addEventListener("click", async () => {
+    if (!confirm("Delete your account? This permanently deletes your progress, saved writing, notes, calendar, flashcards and AI chat history, and removes your access. This can't be undone.")) return;
+    if (prompt('To confirm, type "DELETE" exactly:') !== "DELETE") return alert("Didn't match — nothing was deleted.");
+    const btn = $("#req-delete", view);
+    btn.disabled = true;
+    const id = authUser.id;
+    await Promise.all(["flashcards", "notes", "ai_chats", "ai_memory", "calendar_events", "writings"]
+      .map((t) => sb.from(t).delete().eq("user_id", id).then(({ error }) => { if (error) console.error(t, error); })));
+    const { error } = await sb.from("profiles").update({
+      deleted: true, has_paid: false, is_admin: false, username: "Deleted user", progress: {}, points: 0, xp: 0, show_points: false,
+    }).eq("id", id);
+    if (error) { btn.disabled = false; return alert("Couldn't delete your account — please try again or contact the site owner."); }
+    alert("Your account and data have been deleted. You'll now be logged out.");
+    logout();
   });
   $("#set-logout", view).addEventListener("click", logout);
 }

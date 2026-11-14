@@ -64,15 +64,27 @@
           <label class="field" for="auth-password">Password</label>
           <input type="password" id="auth-password" autocomplete="current-password" required minlength="6">
         </div>
+        <div id="auth-age-field" class="hidden small muted" style="margin-top:4px;">
+          <label class="field" style="margin-bottom:4px;">Your age</label>
+          <label style="display:flex; gap:8px; align-items:flex-start; margin-bottom:4px;">
+            <input type="radio" name="auth-age" id="auth-age-over" value="over" checked> <span>I am 13 or older</span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:flex-start;">
+            <input type="radio" name="auth-age" id="auth-age-under" value="under"> <span>I am under 13</span>
+          </label>
+          <label id="auth-parent-field" class="hidden" style="display:flex; gap:8px; align-items:flex-start; margin-top:6px;">
+            <input type="checkbox" id="auth-parent-consent"> <span>A parent or guardian has read the Terms &amp; Conditions and Privacy Policy, and agrees to them on my behalf</span>
+          </label>
+        </div>
         <label id="auth-terms-field" class="small muted hidden" style="display:flex; gap:8px; align-items:flex-start;">
-          <input type="checkbox" id="auth-terms"> <span>I agree to the <a href="#" data-open="terms">Terms &amp; Conditions</a> ($10 for 6 months, cash in hand, no refunds)</span>
+          <input type="checkbox" id="auth-terms"> <span>I agree to the <a href="#" data-open="terms">Terms &amp; Conditions</a> and <a href="#" data-open="privacy">Privacy Policy</a> ($10 for 6 months, cash in hand, no refunds)</span>
         </label>
         <div id="auth-msg" class="hidden"></div>
         <button type="submit" id="auth-submit" class="btn block">Log in</button>
       </form>
       <div class="row between" style="margin-top:8px;">
         <button type="button" id="forgot-link" class="btn ghost small">Forgot password?</button>
-        <a href="#" class="small" data-open="terms">Terms &amp; Conditions</a>
+        <span><a href="#" class="small" data-open="terms">Terms</a> · <a href="#" class="small" data-open="privacy">Privacy</a></span>
       </div>
     </div>
 
@@ -215,6 +227,25 @@
       <p><strong>11. Changes to these terms.</strong> These terms may be updated from time to time. If they change, you will be shown what's new and asked to agree before you keep using the site.</p>
       <p><strong>12. Ownership.</strong> JINtelligence, including its name, logos, design, code, lessons and questions, was made by and belongs to <strong>Jayden Narayan</strong>. You must not copy, re-publish, sell or claim the site, or any part of it, as your own.</p>
       <p><strong>13. Contact.</strong> Questions about these terms can be sent via Feedback.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Privacy Policy -->
+<div id="modal-privacy" class="modal hidden">
+  <div class="card stack" style="max-width:560px;">
+    <div class="row between"><h2 style="margin:0;">Privacy Policy</h2><button class="btn ghost" data-close>✕</button></div>
+    <div class="small muted" style="max-height:60vh; overflow-y:auto;">
+      <p><strong>1. What we collect.</strong> Your email, display name, password (stored securely by our login provider, Supabase — we never see it in plain text), your practice progress and points, saved writing, notes, flashcards, calendar events, any tests you build or save, and your AI tutor chat history and AI memories (short notes the AI keeps about topics you find tricky, if you turn this on).</p>
+      <p><strong>2. Why we collect it.</strong> To run your account, track your progress, show you a leaderboard (if you choose to appear on it), let the AI tutor help you and remember useful context, and let you come back to your saved work from any device.</p>
+      <p><strong>3. Who can see it.</strong> Only you and the site owner (admin) can see your saved writing, notes, calendar, AI chats and AI memories. Your username and points can be seen by other users on the leaderboard, unless you hide this in Settings. If you publish a test, other users can see its questions and your name, unless you hide your points.</p>
+      <p><strong>4. Where it's stored.</strong> Your data is stored with Supabase, our database and login provider, who process it on our behalf. When you use the AI tutor, AI test-writing or AI marking features, the text you send (your questions, answers or writing) is sent to our AI provider (Anthropic's Claude) to generate a response — it is not used to train their models. We never sell your data to anyone.</p>
+      <p><strong>5. Children's privacy.</strong> This site is used by school students. If you are under 18, a parent or guardian should agree to this Privacy Policy and the Terms &amp; Conditions before you sign up. If you are under 13, a parent or guardian must agree on your behalf — there's a checkbox for this when you create an account. Parents or guardians can contact us via Feedback (once logged in) to review, change or delete their child's data at any time.</p>
+      <p><strong>6. How long we keep it.</strong> We keep your data while your account is active. If you delete your account, your progress, saved writing, notes, calendar, flashcards and AI chat history are deleted straight away, and your profile is anonymised. A record that an account once existed may be kept briefly for admin purposes (like unlocking payments), with your personal details removed.</p>
+      <p><strong>7. Your rights.</strong> You can see and delete your own AI memories at any time in Settings. You can delete your own notes, calendar events and saved writing from their pages. You can delete your whole account and data at any time from Settings → Help &amp; legal → Delete my account. You can also ask us anything about your data via Feedback.</p>
+      <p><strong>8. Security.</strong> We rely on Supabase's security (encrypted connections, hashed passwords, access rules so only you and the admin can reach your private data). No system is perfectly secure, but we take reasonable steps to protect your information.</p>
+      <p><strong>9. Changes to this policy.</strong> If this policy changes in a way that matters, we'll let you know the same way we tell you about Terms &amp; Conditions changes.</p>
+      <p><strong>10. Contact.</strong> Questions about your privacy or data can be sent via Feedback, or to the site owner, <strong>Jayden Narayan</strong>, directly.</p>
     </div>
   </div>
 </div>
