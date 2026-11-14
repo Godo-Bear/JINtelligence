@@ -193,6 +193,38 @@ async function aiErrorInfo(err) {
   return { retry: true, message: "Sorry, I couldn't reach the AI. Check your internet, then try again in a moment." };
 }
 const AI_TRIES = 3;
+
+// ---------------- AI daily usage limits (tutor chat + AI-made tests; admins are exempt) ----------------
+const AI_LIMITS = { tutor: 40, aitest: 6 };
+const aiUsageDay = () => new Date().toISOString().slice(0, 10);
+// Reads today's usage row for the current user. Treated as 0/0 if there's no row yet, or on any error
+// (fails open — a network hiccup shouldn't lock a student out of the AI).
+async function aiUsageToday() {
+  try {
+    const { data } = await sb.from("ai_usage").select("tutor_count, aitest_count").eq("user_id", authUser.id).eq("day", aiUsageDay()).maybeSingle();
+    return { tutor: data?.tutor_count || 0, aitest: data?.aitest_count || 0 };
+  } catch (e) { return { tutor: 0, aitest: 0 }; }
+}
+// Call before an AI tutor message or AI-made test. Returns false (and shows a toast) if today's limit is
+// used up; admins always pass.
+async function checkAiLimit(kind) {
+  if (me.isAdmin) return true;
+  const used = (await aiUsageToday())[kind];
+  const limit = AI_LIMITS[kind];
+  if (used < limit) return true;
+  toast(`You've used all ${limit} of your ${kind === "tutor" ? "AI tutor messages" : "AI-made tests"} for today — try again tomorrow!`);
+  return false;
+}
+// Call once an AI tutor message or AI-made test has actually succeeded, to count it against today's limit.
+async function bumpAiUsage(kind) {
+  if (me.isAdmin) return;
+  try {
+    const usage = await aiUsageToday();
+    const col = kind === "tutor" ? "tutor_count" : "aitest_count";
+    await sb.from("ai_usage").upsert({ user_id: authUser.id, day: aiUsageDay(), [col]: (usage[kind] || 0) + 1 }, { onConflict: "user_id,day" });
+  } catch (e) { /* usage tracking is best-effort; never block the student over it */ }
+}
+
 // The tutor's answer exactly as written (for replies that are JSON). If the AI is busy or the connection
 // drops, it tries again by itself (up to 3 tries in all); onRetry(n) lets the page say so.
 // Errors it throws have a .userMessage saying what went wrong.
@@ -2373,6 +2405,7 @@ function pickBuilder(view, host) {
     // The question bank is Year 7, so for any other level the AI writes the test at that level.
     const atLevel = !useBank();
     if (examples || files.length || atLevel) {
+      if (!(await checkAiLimit("aitest"))) return;
       const btn = startBtn;
       btn.disabled = true;
       btn.textContent = "Writing your test…";
@@ -2380,6 +2413,7 @@ function pickBuilder(view, host) {
         const topics = filesOnly ? null : topicIds.map(findTopic);
         const qs = await generateAIQuestions(examples, count, topics, diffs.length ? diffs : [1, 2, 3], testFiles);
         if (!qs.length) throw new Error("No usable questions");
+        bumpAiUsage("aitest");
         if (share) { btn.disabled = false; btn.textContent = label; }
         go(qs.map((q) => ({ q, topic: { id: null, name: q.topicName, icon: "🤖" } })), minutes);
       } catch (e) {
@@ -2946,6 +2980,7 @@ function pageTutor(view) {
     const files = uploadsReady(tutorFiles);
     if (!current || busy || (!question && !pendingImage && !files.length)) return;
     if (tutorFiles.some((f) => f.status === "reading")) return toast("Your files are still loading — wait a moment, then send again.");
+    if (!(await checkAiLimit("tutor"))) return;
     const image = pendingImage, chat = current; // the student may switch chats while the tutor is thinking
     const earlier = chat.messages.filter((m) => !m.pending && m.role !== "err");
     chat.messages.push({ role: "me", text: question || (image ? "Can you check my working?" : "Can you look at my files?"), image: image?.base64, photo: !!image, ...(files.length ? { files: files.map((f) => f.name) } : {}) });
@@ -2966,6 +3001,7 @@ function pageTutor(view) {
       // A photo of working takes priority over pictures in the files (one image can go with each message).
       if (image) { body.image = image.base64; body.imageMimeType = image.mimeType; }
       const raw = await askTutorRaw(body, { onRetry: (n) => say(`The AI is busy — trying again (${n + 1} of ${AI_TRIES})…`) });
+      bumpAiUsage("tutor");
       const data = parseLooseJSON(raw);
       const obj = data && !Array.isArray(data) ? data : {};
       pending.text = cleanTutorAnswer(aiReplyText(raw, data)) || "Sorry, I couldn't come up with an answer. Try asking another way.";
@@ -3275,6 +3311,11 @@ function pageSettings(view) {
       ${feedbackPickerHTML()}
     </div>
 
+    ${me.isAdmin ? "" : `
+    <div class="section-label">AI usage today</div>
+    <div class="card stack" id="set-ai-usage"><p class="muted small" style="margin:0;">Loading…</p></div>
+    `}
+
     <div class="section-label">Appearance</div>
     <div class="card stack">
       <div class="row between"><span>Theme</span>${choice("theme", [["light", "☀️ Light"], ["dark", "🌙 Dark"], ["system", "📱 Device"]], currentThemeSetting())}</div>
@@ -3396,6 +3437,17 @@ function pageSettings(view) {
   const fbList = $("#set-fb-list", view);
   $("#set-fb-send", view).addEventListener("click", () => sendFeedback($("#set-fb-category", view), $("#set-fb-message", view), $("#set-fb-send", view), fbList));
   loadMyFeedback(fbList);
+
+  if (!me.isAdmin) {
+    aiUsageToday().then((usage) => {
+      const box = $("#set-ai-usage", view);
+      if (!box) return;
+      box.innerHTML = `
+        <div class="row between"><span>AI tutor messages</span><strong>${usage.tutor} / ${AI_LIMITS.tutor}</strong></div>
+        <div class="row between"><span>AI-made tests</span><strong>${usage.aitest} / ${AI_LIMITS.aitest}</strong></div>
+        <p class="muted small" style="margin:0;">Resets at midnight. The question bank (Practice and Test → Pick topics) doesn't count towards this.</p>`;
+    });
+  }
 
   $("#req-delete", view).addEventListener("click", async () => {
     if (!confirm("Delete your account? This permanently deletes your progress, saved writing, notes, calendar, flashcards and AI chat history, and removes your access. This can't be undone.")) return;
