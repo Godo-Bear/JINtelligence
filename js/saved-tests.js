@@ -46,6 +46,7 @@ function syncSavedTests() {
       await pullDecks(decks);
       store(decksKey(), decks);
       await pullSavedTests();
+      if (typeof pullReview === "function") await pullReview();
       pushDecks(decks);
     } catch (e) { console.warn("Apex: couldn't sync saved tests —", e.message || e); }
   }, 800);
@@ -203,6 +204,7 @@ document.addEventListener("click", (e) => {
   const on = at < 0;
   if (on) list.unshift(q); else list.splice(at, 1);
   saveTest({ id: FLAG_ID, name: FLAG_NAME, questions: list, minutes: 0, marked: [] });
+  if (typeof addToReview === "function") { if (on) addToReview(q); else removeFromReview(key); }
   $$("[data-flag-q]").filter((b) => b.dataset.flagQ === key).forEach((b) => {
     b.classList.toggle("on", on);
     b.setAttribute("aria-pressed", String(on));

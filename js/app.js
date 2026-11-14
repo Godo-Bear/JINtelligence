@@ -261,7 +261,15 @@ function recordResults(results, { isTest = false } = {}) {
       const p = (me.progress[topic.id] ||= { correct: 0, attempted: 0 });
       p.attempted += 1;
       if (correct) p.correct += 1;
+      if (q.difficulty) {
+        const bd = (p.byDiff ||= {});
+        const d = (bd[q.difficulty] ||= { correct: 0, attempted: 0 });
+        d.attempted += 1;
+        if (correct) d.correct += 1;
+      }
+      if (typeof bumpTopicLast === "function") bumpTopicLast(topic.id);
     }
+    if (typeof reviewOnAnswer === "function") reviewOnAnswer(q, correct, topic);
     if (correct) earned += pointsFor(q, topic);
   });
   const xp = earned * boost.xp;
@@ -845,6 +853,7 @@ function pageHome(view) {
     </div>
     <div style="margin-top:12px;">${rankCard()}</div>
 
+    <div id="home-review" style="margin-top:12px;"></div>
     <div id="home-cal" style="margin-top:12px;"></div>
 
     <div class="section-label">Suggested next</div>
@@ -871,6 +880,7 @@ function pageHome(view) {
   `;
 
   homeCalendarCard($("#home-cal", view));
+  if (typeof renderTodayReview === "function") renderTodayReview($("#home-review", view));
 
   // Top 5, plus your own place if you're further down.
   loadLeaderboard().then((rows) => {
@@ -2649,7 +2659,7 @@ function runTest(view, items, minutes, opts = {}) {
       <div class="card" id="review">
         ${items.map(({ q, topic }, i) => questionHTML(q, i, topic.name, shown[i])).join("")}
       </div>
-      <div class="row" style="margin-top:16px;"><a class="btn" href="#/test" id="again">${esc(opts.again || "Build another test")}</a>
+      <div class="row" style="margin-top:16px;"><a class="btn" href="${esc(opts.againHref || "#/test")}" id="again">${esc(opts.again || "Build another test")}</a>
         ${opts.noPoints || opts.publicId ? "" : `<button class="btn secondary" type="button" id="share-test">🌍 Share this test</button>`}
         <button class="btn secondary" type="button" id="save-test">💾 Save test</button>
         <button class="btn ghost" type="button" id="pdf-test">🖨️ Save as PDF</button></div>

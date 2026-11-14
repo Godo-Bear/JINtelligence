@@ -333,7 +333,7 @@ function pushDecks(state) {
     try {
       const { error } = await sb.from("flashcards").upsert({
         user_id: authUser.id, updated_at: new Date().toISOString(),
-        data: { decks: state.decks.filter((d) => !isBlankDeck(d)), deleted: state.deleted.slice(-200), tests: loadSavedTests().tests, testsDeleted: loadSavedTests().deleted.slice(-200) },
+        data: { decks: state.decks.filter((d) => !isBlankDeck(d)), deleted: state.deleted.slice(-200), tests: loadSavedTests().tests, testsDeleted: loadSavedTests().deleted.slice(-200), review: loadReview().items, reviewDeleted: loadReview().deleted.slice(-300), topicLast: loadTopicLast() },
       });
       if (error) throw error;
     } catch (e) { cloudDecks = false; console.warn("Apex: flashcards table unavailable, saving on this device only —", e.message || e); }

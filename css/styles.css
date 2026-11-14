@@ -1381,3 +1381,6 @@ body.voice-open { overflow: hidden; }
 .fl-result { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
 .fl-result > div { display: flex; flex-direction: column; }
 .fl-result b { font-size: 17px; word-break: break-all; }
+
+/* Today's review card */
+.review-card .emoji { font-size: 28px; }
