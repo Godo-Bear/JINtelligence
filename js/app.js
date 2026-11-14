@@ -411,6 +411,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") $$(".modal:not([data-sticky])").forEach(hide);
 });
 $("#menu-admin").addEventListener("click", () => hide($("#modal-menu")));
+$("#menu-teacher").addEventListener("click", () => hide($("#modal-menu")));
 $("#menu-settings").addEventListener("click", () => hide($("#modal-menu")));
 $("#menu-notes").addEventListener("click", () => hide($("#modal-menu")));
 
@@ -546,10 +547,10 @@ $("#paywall-recheck").addEventListener("click", async () => {
 async function handleAuthenticatedUser(user) {
   authUser = { id: user.id, email: user.email };
   let { data: profile, error } = await sb.from("profiles")
-    .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, show_points")
+    .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, is_teacher, show_points")
     .eq("id", user.id).single();
   if (error && error.code !== "PGRST116") {
-    // Older databases may not have test_points yet.
+    // Older databases may not have test_points/is_teacher yet.
     ({ data: profile, error } = await sb.from("profiles")
       .select("username, has_paid, paid_until, points, xp, progress, friends, is_admin")
       .eq("id", user.id).single());
@@ -571,6 +572,7 @@ async function handleAuthenticatedUser(user) {
     progress: profile.progress || {},
     friends: profile.friends || [],
     isAdmin: !!profile.is_admin,
+    isTeacher: !!profile.is_teacher,
     paidUntil: profile.paid_until || null,
     showPoints: profile.show_points !== false,
   };
@@ -607,6 +609,8 @@ function enterApp() {
     `<a href="#/${n.route}" data-route="${n.route}"><span class="ico">${n.icon}</span><span>${n.label}</span></a>`).join("");
   $("#menu-admin").classList.toggle("hidden", !me.isAdmin);
   $("#foot-admin").classList.toggle("hidden", !me.isAdmin);
+  $("#menu-teacher").classList.toggle("hidden", !me.isTeacher);
+  $("#foot-teacher").classList.toggle("hidden", !me.isTeacher);
   renderMeBox();
   showScreen("app");
   route();
@@ -862,7 +866,7 @@ function route() {
   lastHash = location.hash;
   const [page = "home", arg, arg2] = location.hash.replace(/^#\/?/, "").split("/");
   const view = $("#view");
-  const pages = { home: pageHome, practice: pagePractice, test: pageTest, games: pageGames, tutor: pageTutor, progress: pageProgress, notes: pageNotes, admin: pageAdmin, settings: pageSettings };
+  const pages = { home: pageHome, practice: pagePractice, test: pageTest, games: pageGames, tutor: pageTutor, progress: pageProgress, notes: pageNotes, admin: pageAdmin, teacher: pageTeacher, assignment: pageAssignment, settings: pageSettings };
   const render = pages[page] || pageHome;
   const navRoute = pages[page] ? page : "home";
   $$("[data-route]").forEach((a) => a.classList.toggle("active", a.dataset.route === navRoute));
@@ -918,6 +922,7 @@ function pageHome(view) {
     </div>
     <div style="margin-top:12px;">${rankCard()}</div>
 
+    <div id="home-assignments-wrap" style="margin-top:12px;"></div>
     <div id="home-review" style="margin-top:12px;"></div>
     <div id="home-cal" style="margin-top:12px;"></div>
 
@@ -946,6 +951,9 @@ function pageHome(view) {
 
   homeCalendarCard($("#home-cal", view));
   if (typeof renderTodayReview === "function") renderTodayReview($("#home-review", view));
+  if (typeof myAssignments === "function") {
+    myAssignments().then((list) => { const el = $("#home-assignments-wrap", view); if (el) el.innerHTML = assignedWorkHTML(list); });
+  }
 
   // Top 5, plus your own place if you're further down.
   loadLeaderboard().then((rows) => {
@@ -2727,6 +2735,7 @@ function runTest(view, items, minutes, opts = {}) {
     const right = results.filter((r) => r.correct).length;
     const earned = opts.noPoints ? 0 : recordResults(results, { isTest: true });
     const pct = Math.round((right / items.length) * 100);
+    if (opts.onFinish) { try { await opts.onFinish(results, right, items.length); } catch (e) { console.error("Apex: onFinish failed —", e); } }
 
     view.innerHTML = `
       <div class="page-head"><h1>Results</h1></div>
@@ -3310,6 +3319,16 @@ function pageSettings(view) {
       </div>
     </div>
 
+    <div class="section-label">🏫 Join a class</div>
+    <div class="card stack">
+      <p class="muted small" style="margin:0;">Ask your teacher for their class's join code. Assigned work will then show up on your Home page.</p>
+      <div class="row" style="flex-wrap:nowrap;">
+        <input type="text" id="set-join-code" maxlength="8" placeholder="e.g. 7K3P9A" style="text-transform:uppercase;">
+        <button class="btn secondary" id="set-join-btn">Join</button>
+      </div>
+      <p class="small" id="set-join-status" style="margin:0;"></p>
+    </div>
+
     <div class="section-label">My subscription</div>
     <div class="card stack">
       <p style="margin:0;">${subText}</p>
@@ -3437,6 +3456,16 @@ function pageSettings(view) {
     if (error) return toast(error.message || "Couldn't change your password.");
     $("#set-pass", view).value = "";
     toast("Password changed");
+  });
+
+  $("#set-join-btn", view)?.addEventListener("click", async () => {
+    const btn = $("#set-join-btn", view), status = $("#set-join-status", view);
+    btn.disabled = true;
+    const result = await joinClassByCode($("#set-join-code", view).value);
+    btn.disabled = false;
+    status.textContent = result.message;
+    status.className = result.ok ? "small" : "small error";
+    if (result.ok) $("#set-join-code", view).value = "";
   });
 
   $("#set-showpoints", view).addEventListener("change", async (e) => {
@@ -3643,7 +3672,7 @@ function pageAdmin(view) {
         <div class="list-row" style="${a.deleted ? "opacity:.5;" : ""}">
           ${a.deleted ? "" : `<input type="checkbox" class="pick-acct" data-pick="${a.id}" aria-label="Tick ${esc(a.username || a.email)} for gifts"${picked.has(a.id) ? " checked" : ""}>`}
           <div class="grow">
-            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}
+            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}${a.is_teacher ? ` <span class="tag">teacher</span>` : ""}
             <div class="muted small">${esc(a.email)} · ${a.points || 0} pts · ${a.xp || 0} XP${a.game_data ? ` · 🏅 ${Object.keys(a.game_data.badges || {}).length} badges` : ""} · ${attemptedOf(a.progress)} answered · seen ${timeAgo(a.last_seen)}</div>
           </div>
           ${statusTag(a)}
@@ -3656,6 +3685,7 @@ function pageAdmin(view) {
               ${btn("add-xp", "+10 XP")}${btn("set-xp", "Set XP…")}
               ${btn("renew", "Renew 6 months")}
               ${btn("toggle-admin", a.is_admin ? "Remove admin" : "Make admin")}
+              ${btn("toggle-teacher", a.is_teacher ? "Remove teacher" : "Make teacher")}
               ${btn("reset", "Reset progress")}
               ${isMe ? "" : btn("kick", a.has_paid ? "Kick" : "Unkick", "ghost")}
               ${isMe ? "" : btn("delete", "Delete account", "ghost")}
@@ -3755,6 +3785,9 @@ function pageAdmin(view) {
       case "toggle-admin":
         if (confirm(`${a.is_admin ? "Remove admin from" : "Make admin:"} ${name}?`)) update = { is_admin: !a.is_admin };
         break;
+      case "toggle-teacher":
+        if (confirm(`${a.is_teacher ? "Remove teacher from" : "Make teacher:"} ${name}?`)) update = { is_teacher: !a.is_teacher };
+        break;
       case "reset":
         if (confirm(`Reset all points and progress for ${name}? This can't be undone.`)) update = { points: 0, progress: {} };
         break;
@@ -3785,7 +3818,8 @@ function pageAdmin(view) {
   });
 
   (async () => {
-    let { data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress, last_seen, deleted, game_data");
+    let { data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, progress, last_seen, deleted, game_data");
+    if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress, last_seen, deleted, game_data"));
     if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress, last_seen, deleted"));
     if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress"));
     if (error) { $("#accts", view).innerHTML = `<p class="muted">Couldn't load accounts.</p>`; return; }
