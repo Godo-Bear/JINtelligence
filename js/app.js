@@ -3120,6 +3120,8 @@ function pageProgress(view) {
     </div>
     <div style="margin-top:12px;">${rankCard()}</div>
 
+    <div id="progress-children"></div>
+
     <div class="section-label">Ranks</div>
     <div class="card">
       ${XP_LEVELS.map((l) => {
@@ -3215,6 +3217,10 @@ function pageProgress(view) {
     catch (e) { $("#lb", view).innerHTML = `<p class="muted">Couldn't load the leaderboard.</p>`; return; }
     drawBoard();
   })();
+
+  if (typeof myChildren === "function") {
+    myChildren().then((children) => { const el = $("#progress-children", view); if (el) el.innerHTML = linkedChildrenHTML(children); });
+  }
 }
 
 // ---------------- Settings ----------------
@@ -3327,6 +3333,19 @@ function pageSettings(view) {
         <button class="btn secondary" id="set-join-btn">Join</button>
       </div>
       <p class="small" id="set-join-status" style="margin:0;"></p>
+    </div>
+
+    <div class="section-label">👨‍👩‍👧 Parent access</div>
+    <div class="card stack">
+      <p class="muted small" style="margin:0;">Let a parent or guardian see your progress (read-only — they can't change anything or see your writing, notes or AI chats).</p>
+      <div id="set-parent-code"><p class="muted small" style="margin:0;">Loading…</p></div>
+      <hr style="border:none; border-top:1px solid var(--line); margin:4px 0;">
+      <p class="muted small" style="margin:0;">Got a code from your child? Enter it here to see their progress.</p>
+      <div class="row" style="flex-wrap:nowrap;">
+        <input type="text" id="set-link-code" maxlength="8" placeholder="e.g. 7K3P9A" style="text-transform:uppercase;">
+        <button class="btn secondary" id="set-link-btn">Link</button>
+      </div>
+      <p class="small" id="set-link-status" style="margin:0;"></p>
     </div>
 
     <div class="section-label">My subscription</div>
@@ -3466,6 +3485,39 @@ function pageSettings(view) {
     status.textContent = result.message;
     status.className = result.ok ? "small" : "small error";
     if (result.ok) $("#set-join-code", view).value = "";
+  });
+
+  async function drawParentCode() {
+    const box = $("#set-parent-code", view);
+    if (!box) return;
+    const code = await myParentCode();
+    box.innerHTML = code === null
+      ? `<p class="muted small" style="margin:0;">Couldn't load this — parent access may not be set up on this site yet.</p>`
+      : code
+        ? `<div class="row between"><span>Your code: <code style="font-size:16px; letter-spacing:1px;">${esc(code)}</code></span><button class="btn ghost sm" id="parent-code-revoke">Revoke access</button></div>`
+        : `<button class="btn secondary sm" id="parent-code-make">Generate a code</button>`;
+    $("#parent-code-make", box)?.addEventListener("click", async () => {
+      $("#parent-code-make", box).disabled = true;
+      await makeParentCode();
+      drawParentCode();
+    });
+    $("#parent-code-revoke", box)?.addEventListener("click", async () => {
+      if (!confirm("Revoke parent access? Anyone already linked will stop being able to see your progress.")) return;
+      await revokeParentCode();
+      toast("Parent access revoked");
+      drawParentCode();
+    });
+  }
+  drawParentCode();
+
+  $("#set-link-btn", view)?.addEventListener("click", async () => {
+    const btn = $("#set-link-btn", view), status = $("#set-link-status", view);
+    btn.disabled = true;
+    const result = await linkToChild($("#set-link-code", view).value);
+    btn.disabled = false;
+    status.textContent = result.message;
+    status.className = result.ok ? "small" : "small error";
+    if (result.ok) $("#set-link-code", view).value = "";
   });
 
   $("#set-showpoints", view).addEventListener("change", async (e) => {
