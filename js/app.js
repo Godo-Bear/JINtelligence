@@ -139,6 +139,29 @@ function toast(msg) {
   setTimeout(() => el.remove(), 2600);
 }
 
+// ---------------- Client error logging (for the admin "Error logs" viewer) ----------------
+// Best-effort: logging a bug must never itself throw or block the app.
+let lastLoggedError = ""; // crude de-dupe so one bug spamming in a loop doesn't flood the table
+async function logClientError(context, err) {
+  try {
+    const message = String(err?.message || err || "Unknown error").slice(0, 2000);
+    const key = `${context}:${message}`;
+    if (key === lastLoggedError) return;
+    lastLoggedError = key;
+    await sb.from("error_logs").insert({
+      user_id: authUser?.id || null,
+      username: (typeof me !== "undefined" && me?.name) || null,
+      context,
+      message,
+      stack: String(err?.stack || "").slice(0, 4000),
+      url: location.hash || location.pathname,
+      user_agent: navigator.userAgent,
+    });
+  } catch (e) { /* logging is best-effort only */ }
+}
+window.addEventListener("error", (e) => logClientError("window.onerror", e.error || e.message));
+window.addEventListener("unhandledrejection", (e) => logClientError("unhandledrejection", e.reason));
+
 function setMsg(el, text, kind) {
   el.className = kind;
   el.textContent = text;
@@ -3549,6 +3572,11 @@ function pageAdmin(view) {
     </div>
     <div class="card"><div id="fb-list"><p class="muted">Loading…</p></div></div>
 
+    <div class="section-label row between" style="margin-bottom:10px;">
+      <span>🐛 Error logs</span><button class="btn ghost sm" id="errlog-clear">Clear all</button>
+    </div>
+    <div class="card"><div id="errlog-list"><p class="muted">Loading…</p></div></div>
+
     <div class="section-label">Import questions</div>
     <div class="card stack">
       <p class="small muted" style="margin:0;">Paste rows from a spreadsheet (comma or tab separated), one question per line:
@@ -3889,6 +3917,28 @@ function pageAdmin(view) {
     loadFeedback();
   });
   loadFeedback();
+
+  // ----- Error logs (bugs reported automatically by students' browsers) -----
+  async function loadErrorLogs() {
+    const box = $("#errlog-list", view);
+    const { data, error } = await sb.from("error_logs").select("*").order("created_at", { ascending: false }).limit(100);
+    if (error) { box.innerHTML = `<p class="muted">No error log table yet — see the setup note in Claude's summary to add one.</p>`; return; }
+    if (!data.length) { box.innerHTML = `<p class="muted">No errors reported. 🎉</p>`; return; }
+    box.innerHTML = data.map((e) => `
+      <div class="list-row" style="align-items:flex-start; display:block;">
+        <div class="row between"><span class="tag bad">${esc(e.context || "error")}</span><span class="muted small">${fmtDateTime(e.created_at)}</span></div>
+        <div style="white-space:pre-wrap; margin-top:4px;"><strong>${esc(e.username || "Unknown user")}</strong> — ${esc(e.message)}</div>
+        <div class="muted small" style="margin-top:2px;">${esc(e.url || "")}</div>
+        ${e.stack ? `<details style="margin-top:4px;"><summary class="small muted">Stack trace</summary><pre class="small muted" style="white-space:pre-wrap; margin:4px 0 0;">${esc(e.stack)}</pre></details>` : ""}
+      </div>`).join("");
+  }
+  $("#errlog-clear", view).addEventListener("click", async () => {
+    if (!confirm("Delete all error logs? This can't be undone.")) return;
+    const { error } = await sb.from("error_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) return toast("Couldn't clear error logs.");
+    loadErrorLogs();
+  });
+  loadErrorLogs();
 
   // ----- Bulk import -----
   $("#import-btn", view).addEventListener("click", async () => {
