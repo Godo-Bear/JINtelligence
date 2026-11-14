@@ -3383,6 +3383,16 @@ function pageSettings(view) {
       </div>
     </div>
 
+    <div class="section-label">Install app</div>
+    <div class="card stack" id="set-install">
+      ${window.__pwaInstallEvent
+        ? `<div class="row between"><span class="muted small">Add JINtelligence to your home screen for one-tap access, a full-screen view and offline use.</span><button class="btn secondary" id="pwa-install-btn">📲 Install</button></div>`
+        : `<p class="muted small" style="margin:0;">Add JINtelligence to your home screen for one-tap access, a full-screen view and offline use.<br>
+           <b>iPhone/iPad:</b> tap the Share icon, then "Add to Home Screen".<br>
+           <b>Android/Chrome:</b> tap the ⋮ menu, then "Install app" (or look for an install icon in the address bar).<br>
+           <b>Desktop (Chrome/Edge):</b> look for an install icon on the right of the address bar.</p>`}
+    </div>
+
     <div class="section-label">Help &amp; legal</div>
     <div class="card stack">
       <div class="row">
@@ -3455,6 +3465,15 @@ function pageSettings(view) {
       btn.textContent = "🔄 Try again";
     }
     btn.disabled = false;
+  });
+
+  $("#pwa-install-btn", view)?.addEventListener("click", async () => {
+    const promptEvent = window.__pwaInstallEvent;
+    if (!promptEvent) return toast("Install isn't available right now — try the browser's own menu instead.");
+    promptEvent.prompt();
+    const { outcome } = await promptEvent.userChoice;
+    if (outcome === "accepted") toast("Installing JINtelligence…");
+    window.__pwaInstallEvent = null;
   });
 
   const fbList = $("#set-fb-list", view);
@@ -3979,4 +3998,11 @@ function pageAdmin(view) {
     if (session?.user) handleAuthenticatedUser(session.user);
     else showAuthPanel("main");
   });
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  }
+  // Chrome/Edge/Android fire this instead of showing their own install UI immediately, so we can offer
+  // a proper "Install" button in Settings. Safari/iOS never fire it — that's handled with instructions instead.
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); window.__pwaInstallEvent = e; });
 })();
