@@ -83,6 +83,21 @@ function askTutorAbout(q, n) {
   goTo("#/tutor");
 }
 
+// Save any plain text as a PDF (via the browser's print dialog — pick "Save as PDF" as the destination).
+// Used for the AI tutor's answers and chats; general-purpose enough for other AI-written text too.
+const textToParagraphsHTML = (text) => String(text || "").trim().split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+function printDoc(title, bodyHTML) {
+  let host = document.getElementById("print-doc");
+  if (!host) { host = document.createElement("div"); host.id = "print-doc"; document.body.appendChild(host); }
+  host.innerHTML = `<header class="pd-head"><h1>${esc(title || "JINtelligence")}</h1><div class="muted small">${fmtDate(new Date())}</div></header>
+    <div class="pd-body">${bodyHTML}</div>
+    <footer class="pt-foot">JINtelligence</footer>`;
+  document.body.classList.add("printing-doc");
+  const done = () => { document.body.classList.remove("printing-doc"); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  setTimeout(() => window.print(), 300);
+}
+
 // Save as PDF: a clean printable test, with highlighted questions starred and (optionally) an answer sheet.
 function printTest(name, questions, { marked = [], answers = true } = {}) {
   if (!questions.length) return toast("Add some questions first.");

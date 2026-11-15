@@ -219,6 +219,9 @@ const AI_TRIES = 3;
 
 // ---------------- AI daily usage limits (tutor chat + AI-made tests; admins are exempt) ----------------
 const AI_LIMITS = { tutor: 40, aitest: 6 };
+// The base daily limit, boosted by whatever extra % an admin has granted this account (Admin → Manage →
+// "AI bonus"). 50% bonus on 40 tutor messages = 60; rounds down so a bonus never grants a fraction of a use.
+const aiLimitFor = (kind) => Math.floor(AI_LIMITS[kind] * (1 + (me.aiBonusPct || 0) / 100));
 const aiUsageDay = () => new Date().toISOString().slice(0, 10);
 // Reads today's usage row for the current user. Treated as 0/0 if there's no row yet, or on any error
 // (fails open — a network hiccup shouldn't lock a student out of the AI).
@@ -233,7 +236,7 @@ async function aiUsageToday() {
 async function checkAiLimit(kind) {
   if (me.isAdmin) return true;
   const used = (await aiUsageToday())[kind];
-  const limit = AI_LIMITS[kind];
+  const limit = aiLimitFor(kind);
   if (used < limit) return true;
   toast(`You've used all ${limit} of your ${kind === "tutor" ? "AI tutor messages" : "AI-made tests"} for today — try again tomorrow!`);
   return false;
@@ -567,10 +570,10 @@ $("#paywall-pay-btn").addEventListener("click", () => startCheckout($("#paywall-
 async function handleAuthenticatedUser(user) {
   authUser = { id: user.id, email: user.email };
   let { data: profile, error } = await sb.from("profiles")
-    .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, is_teacher, show_points")
+    .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, is_teacher, ai_bonus_pct, show_points")
     .eq("id", user.id).single();
   if (error && error.code !== "PGRST116") {
-    // Older databases may not have test_points/is_teacher yet.
+    // Older databases may not have test_points/is_teacher/ai_bonus_pct yet.
     ({ data: profile, error } = await sb.from("profiles")
       .select("username, has_paid, paid_until, points, xp, progress, friends, is_admin")
       .eq("id", user.id).single());
@@ -593,6 +596,7 @@ async function handleAuthenticatedUser(user) {
     friends: profile.friends || [],
     isAdmin: !!profile.is_admin,
     isTeacher: !!profile.is_teacher,
+    aiBonusPct: profile.ai_bonus_pct || 0,
     paidUntil: profile.paid_until || null,
     showPoints: profile.show_points !== false,
   };
@@ -2852,6 +2856,7 @@ function pageTutor(view) {
         <div class="tutor-bar">
           <button class="btn ghost sm tutor-toggle" type="button" id="t-toggle" aria-expanded="false" aria-controls="t-side">☰ Chats</button>
           <strong class="tutor-title" id="t-title"></strong>
+          <button class="btn ghost sm" type="button" id="t-pdf" title="Save this whole chat as a PDF">🖨️ PDF</button>
           <button class="btn ghost sm tutor-new" type="button" data-new-chat title="Start a new chat">＋ New</button>
         </div>
         <div class="tutor-fb">${levelPickerHTML()}${feedbackPickerHTML("How the tutor talks when it checks your work or a photo of your working.")}</div>
@@ -2896,7 +2901,7 @@ function pageTutor(view) {
       $$(".chips button", chatBox).forEach((b) => b.addEventListener("click", () => { $("#ask", view).value = b.textContent; $("#chat-form", view).requestSubmit(); }));
       return;
     }
-    chatBox.innerHTML = current.messages.map((m) => `<div class="bubble ${m.role}${m.pending ? " pending" : ""}">${m.image ? `<img src="${m.image}" alt="Your photo">` : m.photo ? `<span class="bubble-photo">📷 Photo</span>` : ""}${m.files?.length ? `<span class="bubble-photo">📎 ${esc(m.files.join(", "))}</span>` : ""}${esc(m.text)}${m.note ? `<div class="bubble-note">${esc(m.note)}</div>` : ""}</div>`).join("");
+    chatBox.innerHTML = current.messages.map((m, i) => `<div class="bubble ${m.role}${m.pending ? " pending" : ""}">${m.image ? `<img src="${m.image}" alt="Your photo">` : m.photo ? `<span class="bubble-photo">📷 Photo</span>` : ""}${m.files?.length ? `<span class="bubble-photo">📎 ${esc(m.files.join(", "))}</span>` : ""}${esc(m.text)}${m.note ? `<div class="bubble-note">${esc(m.note)}</div>` : ""}${m.role === "bot" && !m.pending ? `<button type="button" class="btn ghost sm bubble-pdf" data-pdf-msg="${i}" title="Save this answer as a PDF">📄 PDF</button>` : ""}</div>`).join("");
     chatBox.scrollTop = chatBox.scrollHeight;
   };
   const drawList = () => {
@@ -2943,6 +2948,20 @@ function pageTutor(view) {
     onChange: drawList,
     onChatsDeleted: () => { chats = []; openChat(blankChat()); },
   }));
+
+  $("#t-pdf", view).addEventListener("click", () => {
+    const real = current?.messages.filter((m) => !m.pending) || [];
+    if (!real.length) return toast("Nothing in this chat yet.");
+    const body = real.map((m) => `<div class="pd-turn pd-${m.role}"><b>${m.role === "me" ? "You" : "Tutor"}:</b> ${esc(m.text || "").replace(/\n/g, "<br>")}</div>`).join("");
+    printDoc(current.title, body);
+  });
+  chatBox.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-pdf-msg]");
+    if (!btn) return;
+    const m = current?.messages[+btn.dataset.pdfMsg];
+    if (!m?.text?.trim()) return toast("Nothing to save yet.");
+    printDoc(current.title, textToParagraphsHTML(m.text));
+  });
 
   $("#photo", view).addEventListener("click", () => $("#photo-input", view).click());
   $("#photo-input", view).addEventListener("change", (e) => {
@@ -3592,8 +3611,9 @@ function pageSettings(view) {
       const box = $("#set-ai-usage", view);
       if (!box) return;
       box.innerHTML = `
-        <div class="row between"><span>AI tutor messages</span><strong>${usage.tutor} / ${AI_LIMITS.tutor}</strong></div>
-        <div class="row between"><span>AI-made tests</span><strong>${usage.aitest} / ${AI_LIMITS.aitest}</strong></div>
+        <div class="row between"><span>AI tutor messages</span><strong>${usage.tutor} / ${aiLimitFor("tutor")}</strong></div>
+        <div class="row between"><span>AI-made tests</span><strong>${usage.aitest} / ${aiLimitFor("aitest")}</strong></div>
+        ${me.aiBonusPct ? `<p class="small" style="margin:0; color:var(--accent);">🎁 You have a +${me.aiBonusPct}% bonus from the site owner.</p>` : ""}
         <p class="muted small" style="margin:0;">Resets at midnight. The question bank (Practice and Test → Pick topics) doesn't count towards this.</p>`;
     });
   }
@@ -3764,6 +3784,7 @@ function pageAdmin(view) {
               ${btn("renew", "Renew 6 months")}
               ${btn("toggle-admin", a.is_admin ? "Remove admin" : "Make admin")}
               ${btn("toggle-teacher", a.is_teacher ? "Remove teacher" : "Make teacher")}
+              ${btn("set-ai-bonus", `AI bonus${a.ai_bonus_pct ? ` (+${a.ai_bonus_pct}%)` : "…"}`)}
               ${btn("reset", "Reset progress")}
               ${isMe ? "" : btn("kick", a.has_paid ? "Kick" : "Unkick", "ghost")}
               ${isMe ? "" : btn("delete", "Delete account", "ghost")}
@@ -3866,6 +3887,11 @@ function pageAdmin(view) {
       case "toggle-teacher":
         if (confirm(`${a.is_teacher ? "Remove teacher from" : "Make teacher:"} ${name}?`)) update = { is_teacher: !a.is_teacher };
         break;
+      case "set-ai-bonus": {
+        const n = askNumber(`Extra AI usage for ${name}, as a % on top of the normal daily limit (0 for none, e.g. 50 for +50%):`);
+        if (n !== null) update = { ai_bonus_pct: Math.max(0, Math.min(500, n)) };
+        break;
+      }
       case "reset":
         if (confirm(`Reset all points and progress for ${name}? This can't be undone.`)) update = { points: 0, progress: {} };
         break;
@@ -3896,7 +3922,8 @@ function pageAdmin(view) {
   });
 
   (async () => {
-    let { data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, progress, last_seen, deleted, game_data");
+    let { data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, ai_bonus_pct, progress, last_seen, deleted, game_data");
+    if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, progress, last_seen, deleted, game_data"));
     if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress, last_seen, deleted, game_data"));
     if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress, last_seen, deleted"));
     if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress"));
