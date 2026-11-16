@@ -218,8 +218,9 @@ async function aiErrorInfo(err) {
 const AI_TRIES = 3;
 
 // ---------------- Plans (chosen at signup, paid cash in hand) ----------------
-const PLANS = { 1: { months: 1, price: 7, label: "1 month" }, 6: { months: 6, price: 15, label: "6 months" } };
-const planInfo = (months) => PLANS[months] || PLANS[6];
+// Plans: $5 for 1 month, $15 for 4 months. (Accounts made before the 4-month plan, stored as 6, count as the long plan.)
+const PLANS = { 1: { months: 1, price: 5, label: "1 month" }, 4: { months: 4, price: 15, label: "4 months" } };
+const planInfo = (months) => PLANS[months] || PLANS[4];
 const planText = (months) => { const p = planInfo(months); return `$${p.price} for ${p.label}`; };
 const ROLES = { student: "Student", parent: "Parent / guardian", teacher: "Teacher" };
 const roleKey = (email) => `apex-role-${String(email || "").toLowerCase()}`;
@@ -495,7 +496,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
   if (authMode === "signup") {
     if (name.length < 3) return setMsg(msg, "Display name needs at least 3 characters.", "error");
     if (!$('input[name="auth-role"]:checked')) return setMsg(msg, "Please choose whether you are a student, parent or teacher.", "error");
-    if (!$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $7 for 1 month or $15 for 6 months.", "error");
+    if (!$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $5 for 1 month or $15 for 4 months.", "error");
     if (!$("#auth-terms").checked) return setMsg(msg, "Please agree to the Terms & Conditions.", "error");
     if ($("#auth-age-under").checked && !$("#auth-parent-consent").checked) {
       return setMsg(msg, "A parent or guardian needs to agree on your behalf — please tick the box.", "error");
@@ -639,7 +640,7 @@ async function handleAuthenticatedUser(user) {
     ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "account_type", "active_session", "allow_multi_device", "year_level", "show_points"],
   );
   if (error?.code === "PGRST116") {
-    const chosen = store(planKey(user.email)) || 6;
+    const chosen = store(planKey(user.email)) || 4;
     const row = { id: user.id, email: user.email, has_paid: false, points: 0, progress: {} };
     const role = store(roleKey(user.email)) || "student";
     let ins = await sb.from("profiles").insert({ ...row, plan_months: chosen, account_type: role });
@@ -650,7 +651,7 @@ async function handleAuthenticatedUser(user) {
   if (error) { console.error("Apex: profile fetch failed —", error); return showPaywall(); }
 
   const active = profile.has_paid && (!profile.paid_until || new Date(profile.paid_until) > new Date());
-  if (!active) return showPaywall(profile.plan_months || store(planKey(user.email)) || 6);
+  if (!active) return showPaywall(profile.plan_months || store(planKey(user.email)) || 4);
 
   const claim = await claimDevice(profile, fresh);
   if (!claim.ok) { await logout(); showDeviceKickedMessage(); return; }
@@ -665,7 +666,7 @@ async function handleAuthenticatedUser(user) {
     isAdmin: !!profile.is_admin,
     isTeacher: !!profile.is_teacher,
     aiBonusPct: profile.ai_bonus_pct || 0,
-    planMonths: profile.plan_months || 6,
+    planMonths: profile.plan_months || 4,
     accountType: ROLES[profile.account_type] ? profile.account_type : "student",
     multiDevice: !!profile.is_admin || !!profile.allow_multi_device,
     yearLevel: LEARN_LEVELS[profile.year_level] ? profile.year_level : null,
@@ -678,7 +679,7 @@ async function handleAuthenticatedUser(user) {
   enterApp();
 }
 
-function showPaywall(planMonths = 6) {
+function showPaywall(planMonths = 4) {
   $("#paywall-email").textContent = authUser?.email || "";
   $("#paywall-plan").textContent = planText(planMonths);
   showScreen("paywall");
@@ -757,14 +758,14 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-16b";
+const TERMS_VERSION = "2026-11-16c";
 const TERMS_CHANGES = [
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
   "New — calendar: put your tests, assignments and reminders on the calendar (Notes & calendar). It's saved to your account, and the AI can see what's coming up so it can help you prepare (you can turn this off).",
   "New — AI memory: your AI tutor chats are saved to your account, and the AI can remember short notes about you (like topics you find tricky) to help you next time. You can see, delete or turn this off in Settings.",
   "New — public tests: you can share tests with everyone on JINtelligence. Shared tests show your name (unless you turn it off), must follow the behaviour rules, and can be removed by the site owner.",
-  "New — plans: choose $7 for 1 month or $15 for 6 months when you sign up, paid cash in hand to the site owner. Your plan shows in Settings.",
+  "New — plans: choose $5 for 1 month or $15 for 4 months when you sign up, paid cash in hand to the site owner. Your plan shows in Settings.",
   "New — one device: your account can be logged in on one device at a time. Logging in on a new device logs you out of the old one, unless the site owner allows your account to use several devices.",
   "Accounts are unlocked by hand, so it may take a while after paying. No refunds.",
   "Using the AI: it's for learning. Don't hand in AI-written work as your own.",
@@ -1524,7 +1525,7 @@ const learnLevelKey = () => `apex-learn-level-${authUser.id}`;
 // (Admins, and any database that doesn't have the year_level column yet, still choose for themselves.)
 const levelManaged = () => !!(typeof me !== "undefined" && me && me.levelsManaged);
 const learnLevel = () => {
-  if (levelManaged()) return LEARN_LEVELS[me.yearLevel] ? me.yearLevel : "auto";
+  if (levelManaged()) return LEARN_LEVELS[me.yearLevel] ? me.yearLevel : "y7";
   return LEARN_LEVELS[store(learnLevelKey())] ? store(learnLevelKey()) : "auto";
 };
 // The site's question bank is Year 7, so it's used on Year 7 or "Any level"; other levels get AI-written tests.
@@ -4003,7 +4004,7 @@ function pageAdmin(view) {
       case "renew": {
         // Extend from the later of today or the current expiry.
         const from = a.paid_until && new Date(a.paid_until) > new Date() ? a.paid_until : new Date();
-        const n = askNumber(`How many months should ${name} get? (their plan is ${planInfo(a.plan_months).label})`, a.plan_months || 6);
+        const n = askNumber(`How many months should ${name} get? (their plan is ${planInfo(a.plan_months).label})`, planInfo(a.plan_months).months);
         if (n === null) break;
         if (n < 1 || n > 120) { alert("Enter a number of months between 1 and 120."); break; }
         const until = monthsFrom(from, n);
@@ -4033,7 +4034,7 @@ function pageAdmin(view) {
         if (confirm(`Reset all points and progress for ${name}? This can't be undone.`)) update = { points: 0, progress: {} };
         break;
       case "kick":
-        if (confirm(`${a.has_paid ? "Suspend" : "Reinstate"} ${name}?`)) update = a.has_paid ? { has_paid: false } : { has_paid: true, paid_until: monthsFrom(new Date(), a.plan_months || 6) };
+        if (confirm(`${a.has_paid ? "Suspend" : "Reinstate"} ${name}?`)) update = a.has_paid ? { has_paid: false } : { has_paid: true, paid_until: monthsFrom(new Date(), planInfo(a.plan_months).months) };
         break;
       case "delete":
         if (!confirm(`Delete ${name}'s account? They'll be removed from the leaderboard and lose access.`)) break;

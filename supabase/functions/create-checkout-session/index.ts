@@ -15,8 +15,8 @@ const json = (body: unknown, status = 200) =>
 
 // Plans, in cents AUD — keep in step with the prices shown on the sign-up screen and in the Terms.
 const PLANS: Record<number, { cents: number; label: string }> = {
-  1: { cents: 700, label: '1 month' },
-  6: { cents: 1500, label: '6 months' },
+  1: { cents: 500, label: '1 month' },
+  4: { cents: 1500, label: '4 months' },
 };
 const CURRENCY = 'aud';
 const FALLBACK_SITE_URL = 'https://jintelligence.jn-studios.workers.dev';
@@ -35,9 +35,9 @@ Deno.serve(async (req) => {
     const { origin } = await req.json().catch(() => ({ origin: '' }));
     const site = typeof origin === 'string' && /^https:\/\//.test(origin) ? origin : FALLBACK_SITE_URL;
 
-    // The student's chosen plan (set at sign-up); defaults to 6 months if it isn't recorded.
+    // The student's chosen plan (set at sign-up); defaults to 4 months if it isn't recorded (older accounts stored 6 for the long plan).
     const { data: prof } = await admin.from('profiles').select('plan_months').eq('id', who.user.id).maybeSingle();
-    const months = PLANS[prof?.plan_months as number] ? (prof!.plan_months as number) : 6;
+    const months = prof?.plan_months === 1 ? 1 : 4;
     const plan = PLANS[months];
 
     const stripe = new Stripe(secretKey, { apiVersion: '2024-06-20', httpClient: Stripe.createFetchHttpClient() });

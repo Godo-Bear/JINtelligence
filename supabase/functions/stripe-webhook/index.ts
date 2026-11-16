@@ -47,11 +47,11 @@ Deno.serve(async (req) => {
         });
 
         // Extend from the later of today or the current expiry — the same rule the admin's own
-        // "Renew 6 months" button uses, so online and manual renewals behave the same way.
+        // "Add months…" button uses, so online and manual renewals behave the same way.
         const { data: profile } = await admin.from('profiles').select('paid_until').eq('id', userId).maybeSingle();
         const from = profile?.paid_until && new Date(profile.paid_until) > new Date() ? new Date(profile.paid_until) : new Date();
         const until = new Date(from);
-        const months = Math.max(1, Math.min(12, parseInt(session.metadata?.months ?? '6', 10) || 6));
+        const months = Math.max(1, Math.min(12, parseInt(session.metadata?.months ?? '4', 10) || 4));
         until.setMonth(until.getMonth() + months);
         await admin.from('profiles').update({ has_paid: true, paid_until: until.toISOString(), deleted: false }).eq('id', userId);
       }
