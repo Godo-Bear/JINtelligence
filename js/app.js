@@ -221,6 +221,8 @@ const AI_TRIES = 3;
 const PLANS = { 1: { months: 1, price: 5, label: "1 month" }, 6: { months: 6, price: 15, label: "6 months" } };
 const planInfo = (months) => PLANS[months] || PLANS[6];
 const planText = (months) => { const p = planInfo(months); return `$${p.price} for ${p.label}`; };
+const ROLES = { student: "Student", parent: "Parent / guardian", teacher: "Teacher" };
+const roleKey = (email) => `apex-role-${String(email || "").toLowerCase()}`;
 const planKey = (email) => `apex-plan-${String(email || "").toLowerCase()}`;
 const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x.toISOString(); };
 
@@ -452,14 +454,34 @@ $$("[data-auth-mode]").forEach((btn) => btn.addEventListener("click", () => {
   $("#auth-terms-field").classList.toggle("hidden", !signup);
   $("#auth-age-field").classList.toggle("hidden", !signup);
   $("#auth-plan-field").classList.toggle("hidden", !signup);
+  $("#auth-role-field").classList.toggle("hidden", !signup);
+  hide($("#auth-resend"));
   $("#auth-submit").textContent = signup ? "Create account" : "Log in";
   $("#auth-password").autocomplete = signup ? "new-password" : "current-password";
   hide($("#auth-msg"));
 }));
 
+const ROLE_HINTS = {
+  student: "Practise, take tests and use the AI tutor.",
+  parent: "Follow your child's progress with a code from their account.",
+  teacher: "Run classes and set work. The site owner verifies teachers before the Teacher page unlocks.",
+};
+$$('input[name="auth-role"]').forEach((r) => r.addEventListener("change", () => { $("#auth-role-hint").textContent = ROLE_HINTS[r.value]; }));
 $$('input[name="auth-age"]').forEach((r) => r.addEventListener("change", () => {
   $("#auth-parent-field").classList.toggle("hidden", !$("#auth-age-under").checked);
 }));
+
+let lastSignupEmail = "";
+$("#auth-resend").addEventListener("click", async () => {
+  const msg = $("#auth-msg");
+  const email = lastSignupEmail || $("#auth-email").value.trim();
+  if (!email) return setMsg(msg, "Type your email above first.", "error");
+  $("#auth-resend").disabled = true;
+  const { error } = await sb.auth.resend({ type: "signup", email });
+  $("#auth-resend").disabled = false;
+  if (error) return setMsg(msg, "Couldn't resend just now — wait a minute and try again.", "error");
+  setMsg(msg, `Verification email sent to ${email}. Check your inbox (and spam).`, "success");
+});
 
 $("#auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -472,6 +494,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
 
   if (authMode === "signup") {
     if (name.length < 3) return setMsg(msg, "Display name needs at least 3 characters.", "error");
+    if (!$('input[name="auth-role"]:checked')) return setMsg(msg, "Please choose whether you are a student, parent or teacher.", "error");
     if (!$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $5 for 1 month or $15 for 6 months.", "error");
     if (!$("#auth-terms").checked) return setMsg(msg, "Please agree to the Terms & Conditions.", "error");
     if ($("#auth-age-under").checked && !$("#auth-parent-consent").checked) {
@@ -486,14 +509,20 @@ $("#auth-form").addEventListener("submit", async (e) => {
       if (error) throw error;
       store(`apex-terms-seen-${email}`, TERMS_VERSION);
       store(planKey(email), +$('input[name="auth-plan"]:checked').value);
+      store(roleKey(email), $('input[name="auth-role"]:checked').value);
       if (data.session && data.user) {
         const planMonths = +$('input[name="auth-plan"]:checked').value;
-        const ins = await sb.from("profiles").insert({ id: data.user.id, email, username: name, has_paid: false, agreed_to_terms: true, plan_months: planMonths });
-        if (ins.error) await sb.from("profiles").insert({ id: data.user.id, email, username: name, has_paid: false, agreed_to_terms: true });
+        const role = $('input[name="auth-role"]:checked').value;
+        const base = { id: data.user.id, email, username: name, has_paid: false, agreed_to_terms: true };
+        let ins = await sb.from("profiles").insert({ ...base, plan_months: planMonths, account_type: role });
+        if (ins.error) ins = await sb.from("profiles").insert({ ...base, plan_months: planMonths });
+        if (ins.error) await sb.from("profiles").insert(base);
         await handleAuthenticatedUser(data.user);
       } else {
         $$("[data-auth-mode]")[0].click();
-        setMsg(msg, "Account created! Check your email to confirm it, then log in.", "success");
+        setMsg(msg, "Account created! We sent a verification email — open it to confirm your account, then log in.", "success");
+        lastSignupEmail = email;
+        show($("#auth-resend"));
       }
     } else {
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
@@ -501,7 +530,11 @@ $("#auth-form").addEventListener("submit", async (e) => {
       await handleAuthenticatedUser(data.user);
     }
   } catch (err) {
-    setMsg(msg, err.message || "Something went wrong.", "error");
+    if (/confirm|verif/i.test(err.message || "")) {
+      lastSignupEmail = email;
+      setMsg(msg, "Your email isn't verified yet. Open the verification email we sent you, or resend it below.", "error");
+      show($("#auth-resend"));
+    } else setMsg(msg, err.message || "Something went wrong.", "error");
   }
   btn.disabled = false;
 });
@@ -582,8 +615,14 @@ $("#paywall-pay-btn").addEventListener("click", () => startCheckout($("#paywall-
 async function handleAuthenticatedUser(user) {
   authUser = { id: user.id, email: user.email };
   let { data: profile, error } = await sb.from("profiles")
-    .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, is_teacher, ai_bonus_pct, plan_months, show_points")
+    .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, is_teacher, ai_bonus_pct, plan_months, account_type, show_points")
     .eq("id", user.id).single();
+  if (error && error.code !== "PGRST116") {
+    // Databases without account_type yet.
+    ({ data: profile, error } = await sb.from("profiles")
+      .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, is_teacher, ai_bonus_pct, plan_months, show_points")
+      .eq("id", user.id).single());
+  }
   if (error && error.code !== "PGRST116") {
     // Databases without plan_months yet: retry the full list without it before falling back further.
     ({ data: profile, error } = await sb.from("profiles")
@@ -599,7 +638,9 @@ async function handleAuthenticatedUser(user) {
   if (error?.code === "PGRST116") {
     const chosen = store(planKey(user.email)) || 6;
     const row = { id: user.id, email: user.email, has_paid: false, points: 0, progress: {} };
-    const ins = await sb.from("profiles").insert({ ...row, plan_months: chosen });
+    const role = store(roleKey(user.email)) || "student";
+    let ins = await sb.from("profiles").insert({ ...row, plan_months: chosen, account_type: role });
+    if (ins.error) ins = await sb.from("profiles").insert({ ...row, plan_months: chosen });
     if (ins.error) await sb.from("profiles").insert(row);
     return showPaywall(chosen);
   }
@@ -619,6 +660,7 @@ async function handleAuthenticatedUser(user) {
     isTeacher: !!profile.is_teacher,
     aiBonusPct: profile.ai_bonus_pct || 0,
     planMonths: profile.plan_months || 6,
+    accountType: ROLES[profile.account_type] ? profile.account_type : "student",
     paidUntil: profile.paid_until || null,
     showPoints: profile.show_points !== false,
   };
@@ -969,6 +1011,8 @@ function pageHome(view) {
     </div>
     <div style="margin-top:12px;">${rankCard()}</div>
 
+    ${me.accountType === "teacher" && !me.isTeacher ? `<div class="banner info" style="margin-top:12px;">🍎 Your teacher account is waiting for the site owner to verify it. Until then you can use the site like a student, and the Teacher page will unlock once you're verified.</div>` : ""}
+    ${me.accountType === "parent" ? `<div class="banner info" style="margin-top:12px;">👨‍👩‍👧 Parent account: ask your child for their parent code (Settings → Parent access on their account), then enter it under <a href="#/settings">Settings</a> to see their progress on the <a href="#/progress">Progress</a> page.</div>` : ""}
     <div id="home-assignments-wrap" style="margin-top:12px;"></div>
     <div id="home-review" style="margin-top:12px;"></div>
     <div id="home-cal" style="margin-top:12px;"></div>
@@ -3420,6 +3464,7 @@ function pageSettings(view) {
     <div class="section-label">My subscription</div>
     <div class="card stack">
       <p style="margin:0;">${subText}</p>
+      <p style="margin:0;">Account type: <strong>${esc(ROLES[me.accountType])}</strong>${me.accountType === "teacher" && !me.isTeacher ? ` <span class="tag bad">awaiting verification by the site owner</span>` : me.isTeacher ? ` <span class="tag good">verified</span>` : ""}</p>
       <p style="margin:0;">Your plan: <strong>${esc(planInfo(me.planMonths).label)}</strong> <span class="muted small">(${esc(planText(me.planMonths))})</span></p>
       <p class="muted small" style="margin:0;">To renew, pay <strong>$${planInfo(me.planMonths).price} cash in hand</strong> to the site owner for another ${esc(planInfo(me.planMonths).label)}. Accounts are unlocked by hand, so it may take a while.</p>
       <div class="row" style="flex-wrap:nowrap; align-items:center;">
@@ -3801,7 +3846,7 @@ function pageAdmin(view) {
         <div class="list-row" style="${a.deleted ? "opacity:.5;" : ""}">
           ${a.deleted ? "" : `<input type="checkbox" class="pick-acct" data-pick="${a.id}" aria-label="Tick ${esc(a.username || a.email)} for gifts"${picked.has(a.id) ? " checked" : ""}>`}
           <div class="grow">
-            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}${a.is_teacher ? ` <span class="tag">teacher</span>` : ""} <span class="tag">${esc(planInfo(a.plan_months).label)} plan</span>
+            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}${a.is_teacher ? ` <span class="tag">teacher</span>` : ""} <span class="tag">${esc(planInfo(a.plan_months).label)} plan</span>${a.account_type === "parent" ? ` <span class="tag">parent</span>` : ""}${a.account_type === "teacher" && !a.is_teacher ? ` <span class="tag bad">teacher — awaiting verification</span>` : ""}
             <div class="muted small">${esc(a.email)} · ${a.points || 0} pts · ${a.xp || 0} XP${a.game_data ? ` · 🏅 ${Object.keys(a.game_data.badges || {}).length} badges` : ""} · ${attemptedOf(a.progress)} answered · seen ${timeAgo(a.last_seen)}</div>
           </div>
           ${statusTag(a)}
@@ -3814,7 +3859,7 @@ function pageAdmin(view) {
               ${btn("add-xp", "+10 XP")}${btn("set-xp", "Set XP…")}
               ${btn("renew", "Add months…")}
               ${btn("toggle-admin", a.is_admin ? "Remove admin" : "Make admin")}
-              ${btn("toggle-teacher", a.is_teacher ? "Remove teacher" : "Make teacher")}
+              ${btn("toggle-teacher", a.is_teacher ? "Remove teacher" : a.account_type === "teacher" ? "✅ Verify teacher" : "Make teacher")}
               ${btn("set-ai-bonus", `AI bonus${a.ai_bonus_pct ? ` (+${a.ai_bonus_pct}%)` : "…"}`)}
               ${btn("reset", "Reset progress")}
               ${isMe ? "" : btn("kick", a.has_paid ? "Kick" : "Unkick", "ghost")}
@@ -3919,7 +3964,7 @@ function pageAdmin(view) {
         if (confirm(`${a.is_admin ? "Remove admin from" : "Make admin:"} ${name}?`)) update = { is_admin: !a.is_admin };
         break;
       case "toggle-teacher":
-        if (confirm(`${a.is_teacher ? "Remove teacher from" : "Make teacher:"} ${name}?`)) update = { is_teacher: !a.is_teacher };
+        if (confirm(`${a.is_teacher ? "Remove teacher from" : a.account_type === "teacher" ? "Verify as a teacher:" : "Make teacher:"} ${name}?`)) update = { is_teacher: !a.is_teacher };
         break;
       case "set-ai-bonus": {
         const n = askNumber(`Extra AI usage for ${name}, as a % on top of the normal daily limit (0 for none, e.g. 50 for +50%):`);
@@ -3956,7 +4001,8 @@ function pageAdmin(view) {
   });
 
   (async () => {
-    let { data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, ai_bonus_pct, plan_months, progress, last_seen, deleted, game_data");
+    let { data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, ai_bonus_pct, plan_months, account_type, progress, last_seen, deleted, game_data");
+    if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, ai_bonus_pct, plan_months, progress, last_seen, deleted, game_data"));
     if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, ai_bonus_pct, progress, last_seen, deleted, game_data"));
     if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, progress, last_seen, deleted, game_data"));
     if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress, last_seen, deleted, game_data"));

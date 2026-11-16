@@ -15,15 +15,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261116b">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261116c">
 <!-- Home-screen icon: iPhone/iPad use apple-touch-icon, Android uses the manifest -->
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261116b">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261116c">
 <meta name="apple-mobile-web-app-title" content="JINtelligence">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#8A1C3C">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="css/styles.css?v=20261116b">
+<link rel="stylesheet" href="css/styles.css?v=20261116c">
 <script>
   // Apply the saved theme before first paint to avoid a flash.
   try { const t = localStorage.getItem("apex-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
@@ -33,11 +33,11 @@
 <body>
 
 <template id="logo-tpl">
-  <img class="logo-mark" src="assets/logo.svg?v=20261116b" alt="">
+  <img class="logo-mark" src="assets/logo.svg?v=20261116c" alt="">
 </template>
 <template id="crest-tpl">
-  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261116b" alt="JINtelligence">
-  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261116b" alt="JINtelligence">
+  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261116c" alt="JINtelligence">
+  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261116c" alt="JINtelligence">
 </template>
 
 <!-- Loading -->
@@ -67,20 +67,29 @@
           <label class="field" for="auth-password">Password</label>
           <input type="password" id="auth-password" autocomplete="current-password" required minlength="6">
         </div>
-        <div id="auth-plan-field" class="hidden small" style="margin-top:4px;">
-          <label class="field" style="margin-bottom:4px;">Choose your plan <span class="muted">(pay the site owner cash in hand)</span></label>
-          <label class="plan-opt"><input type="radio" name="auth-plan" value="1"> <span><b>$5</b> for <b>1 month</b></span></label>
-          <label class="plan-opt"><input type="radio" name="auth-plan" value="6"> <span><b>$15</b> for <b>6 months</b> <span class="muted">(save $15)</span></span></label>
+        <div id="auth-role-field" class="hidden signup-group">
+          <div class="signup-label">I am a…</div>
+          <div class="choice-row c3">
+            <label class="choice"><input type="radio" name="auth-role" value="student"><span>Student</span></label>
+            <label class="choice"><input type="radio" name="auth-role" value="parent"><span>Parent</span></label>
+            <label class="choice"><input type="radio" name="auth-role" value="teacher"><span>Teacher</span></label>
+          </div>
+          <div class="signup-hint" id="auth-role-hint">Pick one — you can't be a teacher until the site owner verifies you.</div>
         </div>
-        <div id="auth-age-field" class="hidden small muted" style="margin-top:4px;">
-          <label class="field" style="margin-bottom:4px;">Your age</label>
-          <label style="display:flex; gap:8px; align-items:flex-start; margin-bottom:4px;">
-            <input type="radio" name="auth-age" id="auth-age-over" value="over" checked> <span>I am 13 or older</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:flex-start;">
-            <input type="radio" name="auth-age" id="auth-age-under" value="under"> <span>I am under 13</span>
-          </label>
-          <label id="auth-parent-field" class="hidden" style="display:flex; gap:8px; align-items:flex-start; margin-top:6px;">
+        <div id="auth-plan-field" class="hidden signup-group">
+          <div class="signup-label">Plan <span>· paid cash in hand</span></div>
+          <div class="choice-row c2">
+            <label class="choice plan"><input type="radio" name="auth-plan" value="1"><span><b>$5</b><small>1 month</small></span></label>
+            <label class="choice plan"><input type="radio" name="auth-plan" value="6"><span><b>$15</b><small>6 months · save $15</small></span></label>
+          </div>
+        </div>
+        <div id="auth-age-field" class="hidden signup-group">
+          <div class="signup-label">Your age</div>
+          <div class="choice-row c2">
+            <label class="choice slim"><input type="radio" name="auth-age" id="auth-age-over" value="over" checked><span>13 or older</span></label>
+            <label class="choice slim"><input type="radio" name="auth-age" id="auth-age-under" value="under"><span>Under 13</span></label>
+          </div>
+          <label id="auth-parent-field" class="hidden signup-hint" style="display:flex; gap:8px; align-items:flex-start; margin-top:6px;">
             <input type="checkbox" id="auth-parent-consent"> <span>A parent or guardian has read the Terms &amp; Conditions and Privacy Policy, and agrees to them on my behalf</span>
           </label>
         </div>
@@ -88,6 +97,7 @@
           <input type="checkbox" id="auth-terms"> <span>I agree to the <a href="#" data-open="terms">Terms &amp; Conditions</a> and <a href="#" data-open="privacy">Privacy Policy</a> (your chosen plan, cash in hand, no refunds)</span>
         </label>
         <div id="auth-msg" class="hidden"></div>
+        <button type="button" id="auth-resend" class="btn ghost small hidden">✉️ Resend verification email</button>
         <button type="submit" id="auth-submit" class="btn block">Log in</button>
       </form>
       <div class="row between" style="margin-top:8px;">
@@ -263,33 +273,33 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/data.js?v=20261116b"></script>
-<script src="js/lessons.js?v=20261116b"></script>
-<script src="js/visuals.js?v=20261116b"></script>
-<script src="js/sci-visuals.js?v=20261116b"></script>
-<script src="js/science.js?v=20261116b"></script>
-<script src="js/history-geo.js?v=20261116b"></script>
-<script src="js/bank.js?v=20261116b"></script>
-<script src="js/topics-more.js?v=20261116b"></script>
-<script src="js/challenge.js?v=20261116b"></script>
-<script src="js/coverage.js?v=20261116b"></script>
-<script src="js/problems.js?v=20261116b"></script>
-<script src="js/year8-10.js?v=20261116b"></script>
-<script src="js/uploads.js?v=20261116b"></script>
-<script src="js/study.js?v=20261116b"></script>
-<script src="js/saved-tests.js?v=20261116b"></script>
-<script src="js/review.js?v=20261116b"></script>
-<script src="js/results.js?v=20261116b"></script>
-<script src="js/teacher.js?v=20261116b"></script>
-<script src="js/parent.js?v=20261116b"></script>
-<script src="js/voice.js?v=20261116b"></script>
-<script src="js/notes.js?v=20261116b"></script>
-<script src="js/public-tests.js?v=20261116b"></script>
-<script src="js/ai-memory.js?v=20261116b"></script>
-<script src="js/calendar.js?v=20261116b"></script>
-<script src="js/game-art.js?v=20261116b"></script>
-<script src="js/games.js?v=20261116b"></script>
-<script src="js/gifts.js?v=20261116b"></script>
-<script src="js/app.js?v=20261116b"></script>
+<script src="js/data.js?v=20261116c"></script>
+<script src="js/lessons.js?v=20261116c"></script>
+<script src="js/visuals.js?v=20261116c"></script>
+<script src="js/sci-visuals.js?v=20261116c"></script>
+<script src="js/science.js?v=20261116c"></script>
+<script src="js/history-geo.js?v=20261116c"></script>
+<script src="js/bank.js?v=20261116c"></script>
+<script src="js/topics-more.js?v=20261116c"></script>
+<script src="js/challenge.js?v=20261116c"></script>
+<script src="js/coverage.js?v=20261116c"></script>
+<script src="js/problems.js?v=20261116c"></script>
+<script src="js/year8-10.js?v=20261116c"></script>
+<script src="js/uploads.js?v=20261116c"></script>
+<script src="js/study.js?v=20261116c"></script>
+<script src="js/saved-tests.js?v=20261116c"></script>
+<script src="js/review.js?v=20261116c"></script>
+<script src="js/results.js?v=20261116c"></script>
+<script src="js/teacher.js?v=20261116c"></script>
+<script src="js/parent.js?v=20261116c"></script>
+<script src="js/voice.js?v=20261116c"></script>
+<script src="js/notes.js?v=20261116c"></script>
+<script src="js/public-tests.js?v=20261116c"></script>
+<script src="js/ai-memory.js?v=20261116c"></script>
+<script src="js/calendar.js?v=20261116c"></script>
+<script src="js/game-art.js?v=20261116c"></script>
+<script src="js/games.js?v=20261116c"></script>
+<script src="js/gifts.js?v=20261116c"></script>
+<script src="js/app.js?v=20261116c"></script>
 </body>
 </html>
