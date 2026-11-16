@@ -636,7 +636,7 @@ async function handleAuthenticatedUser(user) {
   let { data: profile, error } = await selectDroppingMissing(
     (cols) => sb.from("profiles").select(cols).eq("id", user.id).single(),
     ["username", "has_paid", "paid_until", "points", "xp", "progress", "friends", "is_admin"],
-    ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "account_type", "active_session", "allow_multi_device", "show_points"],
+    ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "account_type", "active_session", "allow_multi_device", "year_level", "show_points"],
   );
   if (error?.code === "PGRST116") {
     const chosen = store(planKey(user.email)) || 6;
@@ -668,6 +668,8 @@ async function handleAuthenticatedUser(user) {
     planMonths: profile.plan_months || 6,
     accountType: ROLES[profile.account_type] ? profile.account_type : "student",
     multiDevice: !!profile.is_admin || !!profile.allow_multi_device,
+    yearLevel: LEARN_LEVELS[profile.year_level] ? profile.year_level : null,
+    levelsManaged: !profile.is_admin && profile.year_level !== undefined,
     paidUntil: profile.paid_until || null,
     showPoints: profile.show_points !== false,
   };
@@ -1518,7 +1520,13 @@ const LEARN_LEVELS = {
   adult: { label: "Adult learner", who: "an adult learner, who may be new to the topic", how: "be clear and respectful, never talk down, and give real-world examples" },
 };
 const learnLevelKey = () => `apex-learn-level-${authUser.id}`;
-const learnLevel = () => (LEARN_LEVELS[store(learnLevelKey())] ? store(learnLevelKey()) : "auto");
+// Year levels are set by an admin (Admin -> Manage -> "Year level…"); students can't change their own.
+// (Admins, and any database that doesn't have the year_level column yet, still choose for themselves.)
+const levelManaged = () => !!(typeof me !== "undefined" && me && me.levelsManaged);
+const learnLevel = () => {
+  if (levelManaged()) return LEARN_LEVELS[me.yearLevel] ? me.yearLevel : "auto";
+  return LEARN_LEVELS[store(learnLevelKey())] ? store(learnLevelKey()) : "auto";
+};
 // The site's question bank is Year 7, so it's used on Year 7 or "Any level"; other levels get AI-written tests.
 const bankLevel = () => ["auto", "y7"].includes(learnLevel());
 // Added to AI prompts so answers suit the student. `fallback` is the level to use on "Any level" when the work
@@ -1534,6 +1542,14 @@ function learnerLine(fallback = "") {
 const ANY_SUBJECT = "They can ask about ANY subject or learning topic, at any level: maths (from counting to calculus), English and literature, every science, history, geography, economics, business, legal studies, psychology, health and PE, languages, the arts, music, drama, digital technologies and coding, VCE subjects, uni and TAFE topics, study skills, general knowledge and how things work.";
 function levelPickerHTML(note = "") {
   const cur = learnLevel();
+  if (levelManaged()) {
+    const l = LEARN_LEVELS[cur];
+    return `<div class="lvl-pick">
+    <span class="fb-style-label">🎓 Your level</span>
+    <b>${esc(l.short || l.label)}</b>
+    <span class="muted small">Set by the site owner${cur === "auto" ? " — they haven't picked one for you yet, so the AI works it out from what you ask" : ""}.</span>
+  </div>`;
+  }
   return `<label class="lvl-pick">
     <span class="fb-style-label">🎓 Your level</span>
     <select data-learn-level aria-label="Your learning level">
@@ -1544,7 +1560,7 @@ function levelPickerHTML(note = "") {
 }
 document.addEventListener("change", (e) => {
   const sel = e.target.closest("[data-learn-level]");
-  if (!sel || !authUser || !LEARN_LEVELS[sel.value]) return;
+  if (!sel || !authUser || levelManaged() || !LEARN_LEVELS[sel.value]) return;
   store(learnLevelKey(), sel.value);
   $$("[data-learn-level]").forEach((s) => { s.value = sel.value; });
   toast(`Your level: ${LEARN_LEVELS[sel.value].short || LEARN_LEVELS[sel.value].label}`);
@@ -1554,7 +1570,7 @@ document.addEventListener("change", (e) => {
 // On the two test tabs you can tick several year levels to focus on, and how hard the questions should be.
 // No year levels ticked = use "Your level".
 const testLevelsKey = () => `apex-test-levels-${authUser.id}`;
-const testLevels = () => (store(testLevelsKey()) || []).filter((k) => k !== "auto" && LEARN_LEVELS[k]);
+const testLevels = () => (levelManaged() ? [] : (store(testLevelsKey()) || []).filter((k) => k !== "auto" && LEARN_LEVELS[k]));
 const testDiffKey = () => `apex-test-diff-${authUser.id}`;
 const testDiffs = () => { const d = (store(testDiffKey()) || []).filter((x) => [1, 2, 3].includes(x)); return d.length ? d : [1, 2, 3]; };
 const levelNames = (list) => list.map((k) => LEARN_LEVELS[k].label).join(", ");
@@ -1570,6 +1586,11 @@ function testLevelLine(fallback = "") {
 }
 const testDiffLine = () => { const d = testDiffs(); return d.length === 3 ? "DIFFICULTY: mix easier, medium and harder questions." : `DIFFICULTY: only write ${d.map((x) => DIFF_NAMES[x].toLowerCase()).join(" and ")} questions (for the year level), and set each question's difficulty to match (1 = easy, 2 = medium, 3 = hard).`; };
 function testLevelsHTML(note = "") {
+  if (levelManaged()) {
+    const l = LEARN_LEVELS[learnLevel()];
+    return `<div class="test-opt"><span class="fb-style-label">🎓 Year level</span>
+    <span><b>${esc(l.short || l.label)}</b> <span class="muted small">— set by the site owner, so tests are written at this level.</span></span></div>`;
+  }
   const on = new Set(testLevels());
   return `<div class="test-opt">
     <span class="fb-style-label">🎓 Year levels to focus on</span>
@@ -3484,7 +3505,7 @@ function pageSettings(view) {
 
     <div class="section-label">Your level</div>
     <div class="card stack">
-      <p class="muted small" style="margin:0;">The AI can help with any subject at any level — from Prep to VCE, uni, TAFE and beyond. Pick your level so explanations, practice questions and feedback are pitched just right, or leave it on <b>Any level</b> and the AI works it out from what you ask.</p>
+      <p class="muted small" style="margin:0;">The AI can help with any subject at any level — from Prep to VCE, uni, TAFE and beyond. ${levelManaged() ? "Your level is set by the site owner so explanations, practice questions and feedback are pitched just right." : "Pick your level so explanations, practice questions and feedback are pitched just right, or leave it on <b>Any level</b> and the AI works it out from what you ask."}</p>
       ${levelPickerHTML()}
     </div>
 
@@ -3855,7 +3876,7 @@ function pageAdmin(view) {
         <div class="list-row" style="${a.deleted ? "opacity:.5;" : ""}">
           ${a.deleted ? "" : `<input type="checkbox" class="pick-acct" data-pick="${a.id}" aria-label="Tick ${esc(a.username || a.email)} for gifts"${picked.has(a.id) ? " checked" : ""}>`}
           <div class="grow">
-            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}${a.is_teacher ? ` <span class="tag">teacher</span>` : ""} <span class="tag">${esc(planInfo(a.plan_months).label)} plan</span>${a.allow_multi_device ? ` <span class="tag good">multi-device</span>` : ""}${a.account_type === "parent" ? ` <span class="tag">parent</span>` : ""}${a.account_type === "teacher" && !a.is_teacher ? ` <span class="tag bad">teacher — awaiting verification</span>` : ""}
+            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}${a.is_teacher ? ` <span class="tag">teacher</span>` : ""} <span class="tag">${esc(planInfo(a.plan_months).label)} plan</span>${a.allow_multi_device ? ` <span class="tag good">multi-device</span>` : ""}${a.year_level && LEARN_LEVELS[a.year_level] ? ` <span class="tag">🎓 ${esc(LEARN_LEVELS[a.year_level].short || LEARN_LEVELS[a.year_level].label)}</span>` : ""}${a.account_type === "parent" ? ` <span class="tag">parent</span>` : ""}${a.account_type === "teacher" && !a.is_teacher ? ` <span class="tag bad">teacher — awaiting verification</span>` : ""}
             <div class="muted small">${esc(a.email)} · ${a.points || 0} pts · ${a.xp || 0} XP${a.game_data ? ` · 🏅 ${Object.keys(a.game_data.badges || {}).length} badges` : ""} · ${attemptedOf(a.progress)} answered · seen ${timeAgo(a.last_seen)}</div>
           </div>
           ${statusTag(a)}
@@ -3868,6 +3889,7 @@ function pageAdmin(view) {
               ${btn("add-xp", "+10 XP")}${btn("set-xp", "Set XP…")}
               ${btn("renew", "Add months…")}
               ${btn("toggle-admin", a.is_admin ? "Remove admin" : "Make admin")}
+              ${btn("set-level", `Year level${a.year_level && LEARN_LEVELS[a.year_level] ? ` (${LEARN_LEVELS[a.year_level].short || LEARN_LEVELS[a.year_level].label})` : "…"}`)}
               ${btn("toggle-multi", a.allow_multi_device ? "Multi-device: ON" : "Allow multiple devices")}
               ${btn("toggle-teacher", a.is_teacher ? "Remove teacher" : a.account_type === "teacher" ? "✅ Verify teacher" : "Make teacher")}
               ${btn("set-ai-bonus", `AI bonus${a.ai_bonus_pct ? ` (+${a.ai_bonus_pct}%)` : "…"}`)}
@@ -3928,6 +3950,24 @@ function pageAdmin(view) {
   });
 
   const monthsFrom = (d, n) => addMonths(d, n);
+  // A small dialog to pick a year level for one student. Resolves to a level key, null ("not set") or undefined (cancelled).
+  const askLevel = (who, current) => new Promise((resolve) => {
+    const box = document.createElement("div");
+    box.className = "modal";
+    box.innerHTML = `<div class="card stack" role="dialog" aria-label="Set year level">
+      <h3 style="margin:0;">🎓 Year level for ${esc(who)}</h3>
+      <p class="muted small" style="margin:0;">The AI tutor, AI-made tests and feedback are pitched at this level. The student can't change it.</p>
+      <select id="lvl-choice">
+        <option value="">Not set (the AI works it out)</option>
+        ${Object.entries(LEARN_LEVELS).filter(([k]) => k !== "auto").map(([k, v]) => `<option value="${k}"${k === current ? " selected" : ""}>${esc(v.label)}</option>`).join("")}
+      </select>
+      <div class="row" style="justify-content:flex-end;"><button class="btn ghost" type="button" data-cancel>Cancel</button><button class="btn" type="button" data-save>Save</button></div>
+    </div>`;
+    document.body.appendChild(box);
+    const done = (v) => { box.remove(); resolve(v); };
+    box.addEventListener("click", (e) => { if (e.target === box || e.target.closest("[data-cancel]")) done(undefined); });
+    $("[data-save]", box).addEventListener("click", () => done($("#lvl-choice", box).value || null));
+  });
   const askNumber = (label, preset) => {
     const val = prompt(label, preset === undefined ? "" : String(preset));
     if (val === null) return null;
@@ -3973,6 +4013,11 @@ function pageAdmin(view) {
       case "toggle-admin":
         if (confirm(`${a.is_admin ? "Remove admin from" : "Make admin:"} ${name}?`)) update = { is_admin: !a.is_admin };
         break;
+      case "set-level": {
+        const picked = await askLevel(name, a.year_level);
+        if (picked !== undefined) update = { year_level: picked };
+        break;
+      }
       case "toggle-multi":
         if (confirm(`${a.allow_multi_device ? "Limit" : "Let"} ${name} ${a.allow_multi_device ? "to one device at a time" : "log in on several devices at once"}?`)) update = { allow_multi_device: !a.allow_multi_device };
         break;
@@ -4017,7 +4062,7 @@ function pageAdmin(view) {
     const { data, error } = await selectDroppingMissing(
       (cols) => sb.from("profiles").select(cols),
       ["id", "username", "email", "points", "xp", "has_paid", "paid_until", "is_admin", "progress"],
-      ["is_teacher", "ai_bonus_pct", "plan_months", "account_type", "allow_multi_device", "last_seen", "deleted", "game_data"],
+      ["is_teacher", "ai_bonus_pct", "plan_months", "account_type", "allow_multi_device", "year_level", "last_seen", "deleted", "game_data"],
     );
     if (error) { $("#accts", view).innerHTML = `<p class="muted">Couldn't load accounts.</p>`; return; }
     accounts = (data || []).sort((x, y) => (!!x.deleted - !!y.deleted) || (y.points || 0) - (x.points || 0));
