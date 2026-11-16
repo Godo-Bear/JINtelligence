@@ -13,8 +13,11 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-// Six months of access, in cents AUD — keep this in step with the $10 AUD / 6 months price in the Terms.
-const PRICE_CENTS = 1000;
+// Plans, in cents AUD — keep in step with the prices shown on the sign-up screen and in the Terms.
+const PLANS: Record<number, { cents: number; label: string }> = {
+  1: { cents: 500, label: '1 month' },
+  6: { cents: 1500, label: '6 months' },
+};
 const CURRENCY = 'aud';
 const FALLBACK_SITE_URL = 'https://jintelligence.jn-studios.workers.dev';
 
@@ -32,6 +35,11 @@ Deno.serve(async (req) => {
     const { origin } = await req.json().catch(() => ({ origin: '' }));
     const site = typeof origin === 'string' && /^https:\/\//.test(origin) ? origin : FALLBACK_SITE_URL;
 
+    // The student's chosen plan (set at sign-up); defaults to 6 months if it isn't recorded.
+    const { data: prof } = await admin.from('profiles').select('plan_months').eq('id', who.user.id).maybeSingle();
+    const months = PLANS[prof?.plan_months as number] ? (prof!.plan_months as number) : 6;
+    const plan = PLANS[months];
+
     const stripe = new Stripe(secretKey, { apiVersion: '2024-06-20', httpClient: Stripe.createFetchHttpClient() });
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -39,11 +47,12 @@ Deno.serve(async (req) => {
       customer_email: who.user.email,
       // Carries the student's id through to the webhook, which has no other way to know who paid.
       client_reference_id: who.user.id,
+      metadata: { months: String(months) },
       line_items: [{
         price_data: {
           currency: CURRENCY,
-          unit_amount: PRICE_CENTS,
-          product_data: { name: 'JINtelligence — 6 months access' },
+          unit_amount: plan.cents,
+          product_data: { name: `JINtelligence — ${plan.label} access` },
         },
         quantity: 1,
       }],

@@ -1405,3 +1405,12 @@ body.voice-open { overflow: hidden; }
 
 /* Weak spots */
 .diff-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+/* Signup plan picker */
+.plan-opt { display: flex; gap: 10px; align-items: center; padding: 10px 12px; margin-bottom: 6px; border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--surface); }
+.plan-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+
+/* Test results history (Progress page) */
+.result-row { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface); }
+.result-row summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.result-row summary::-webkit-details-marker { display: none; }

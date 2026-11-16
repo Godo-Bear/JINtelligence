@@ -51,7 +51,8 @@ Deno.serve(async (req) => {
         const { data: profile } = await admin.from('profiles').select('paid_until').eq('id', userId).maybeSingle();
         const from = profile?.paid_until && new Date(profile.paid_until) > new Date() ? new Date(profile.paid_until) : new Date();
         const until = new Date(from);
-        until.setMonth(until.getMonth() + 6);
+        const months = Math.max(1, Math.min(12, parseInt(session.metadata?.months ?? '6', 10) || 6));
+        until.setMonth(until.getMonth() + months);
         await admin.from('profiles').update({ has_paid: true, paid_until: until.toISOString(), deleted: false }).eq('id', userId);
       }
     }

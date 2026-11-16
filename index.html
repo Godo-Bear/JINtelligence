@@ -15,15 +15,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261116a">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261116b">
 <!-- Home-screen icon: iPhone/iPad use apple-touch-icon, Android uses the manifest -->
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261116a">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261116b">
 <meta name="apple-mobile-web-app-title" content="JINtelligence">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#8A1C3C">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="css/styles.css?v=20261116a">
+<link rel="stylesheet" href="css/styles.css?v=20261116b">
 <script>
   // Apply the saved theme before first paint to avoid a flash.
   try { const t = localStorage.getItem("apex-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
@@ -33,11 +33,11 @@
 <body>
 
 <template id="logo-tpl">
-  <img class="logo-mark" src="assets/logo.svg?v=20261116a" alt="">
+  <img class="logo-mark" src="assets/logo.svg?v=20261116b" alt="">
 </template>
 <template id="crest-tpl">
-  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261116a" alt="JINtelligence">
-  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261116a" alt="JINtelligence">
+  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261116b" alt="JINtelligence">
+  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261116b" alt="JINtelligence">
 </template>
 
 <!-- Loading -->
@@ -67,6 +67,11 @@
           <label class="field" for="auth-password">Password</label>
           <input type="password" id="auth-password" autocomplete="current-password" required minlength="6">
         </div>
+        <div id="auth-plan-field" class="hidden small" style="margin-top:4px;">
+          <label class="field" style="margin-bottom:4px;">Choose your plan <span class="muted">(pay the site owner cash in hand)</span></label>
+          <label class="plan-opt"><input type="radio" name="auth-plan" value="1"> <span><b>$5</b> for <b>1 month</b></span></label>
+          <label class="plan-opt"><input type="radio" name="auth-plan" value="6"> <span><b>$15</b> for <b>6 months</b> <span class="muted">(save $15)</span></span></label>
+        </div>
         <div id="auth-age-field" class="hidden small muted" style="margin-top:4px;">
           <label class="field" style="margin-bottom:4px;">Your age</label>
           <label style="display:flex; gap:8px; align-items:flex-start; margin-bottom:4px;">
@@ -80,7 +85,7 @@
           </label>
         </div>
         <label id="auth-terms-field" class="small muted hidden" style="display:flex; gap:8px; align-items:flex-start;">
-          <input type="checkbox" id="auth-terms"> <span>I agree to the <a href="#" data-open="terms">Terms &amp; Conditions</a> and <a href="#" data-open="privacy">Privacy Policy</a> ($10 for 6 months, cash in hand, no refunds)</span>
+          <input type="checkbox" id="auth-terms"> <span>I agree to the <a href="#" data-open="terms">Terms &amp; Conditions</a> and <a href="#" data-open="privacy">Privacy Policy</a> (your chosen plan, cash in hand, no refunds)</span>
         </label>
         <div id="auth-msg" class="hidden"></div>
         <button type="submit" id="auth-submit" class="btn block">Log in</button>
@@ -114,7 +119,7 @@
   <div class="card auth-card" style="text-align:center;">
     <div class="logo logo-stack" data-logo></div>
     <h2 style="margin-top:20px;">Almost there</h2>
-    <p class="muted">Your account (<strong id="paywall-email"></strong>) isn't active yet. Access is <strong>$10 for 6 months, paid cash in hand</strong> to the site owner. The owner unlocks accounts by hand, so it may take a while after you've paid. Once it's unlocked, check again.</p>
+    <p class="muted">Your account (<strong id="paywall-email"></strong>) isn't active yet. Your plan is <strong id="paywall-plan">$15 for 6 months</strong>, <strong>paid cash in hand</strong> to the site owner. The owner unlocks accounts by hand, so it may take a while after you've paid. Once it's unlocked, check again.</p>
     <p class="small"><a href="#" data-open="terms">Terms &amp; Conditions</a></p>
     <button id="paywall-pay-btn" class="btn block secondary">💳 Pay online with card</button>
     <p class="small muted" id="paywall-pay-status" style="margin:4px 0 0;"></p>
@@ -208,7 +213,7 @@
   <div class="card stack">
     <h2 style="margin:0;">⏰ Your access is ending soon</h2>
     <p id="renew-text" style="margin:0;"></p>
-    <p class="muted small" style="margin:0;">To keep using JINtelligence, pay <strong>$10 cash in hand</strong> to the site owner for another 6 months. Accounts are unlocked by hand, so pay early. It may take a while to be renewed. Your progress is kept either way.</p>
+    <p class="muted small" style="margin:0;">To keep using JINtelligence, pay your plan price (<strong>$5 for 1 month</strong> or <strong>$15 for 6 months</strong>) <strong>cash in hand</strong> to the site owner. Accounts are unlocked by hand, so pay early. It may take a while to be renewed. Your progress is kept either way.</p>
     <div class="row between">
       <button class="btn ghost" data-open="terms">Terms and Conditions</button>
       <button class="btn" id="renew-ok">Got it</button>
@@ -221,10 +226,10 @@
   <div class="card stack" style="max-width:560px;">
     <div class="row between"><h2 style="margin:0;">Terms and Conditions</h2><button class="btn ghost" data-close>✕</button></div>
     <div class="small muted" style="max-height:60vh; overflow-y:auto;">
-      <p><strong>1. What this is.</strong> JINtelligence (formerly Apex Learning Academy) is a paid maths, English and science practice site covering the Year 7 Victorian Curriculum. Access costs <strong>$10 AUD every 6 months</strong> per account.</p>
-      <p><strong>2. Payment.</strong> Payment is <strong>cash in hand only</strong>, paid directly to the site owner. No card, bank transfer or online payments are accepted, and nothing is charged through this website. Accounts are unlocked by hand by the owner, so <strong>it may take a while for your account to be unlocked</strong> after you've paid (usually within a few days). Your 6 months start from the day your account is unlocked.</p>
-      <p><strong>3. Renewing.</strong> To keep using the site after 6 months, pay another $10 cash in hand. If you don't renew, your account is paused until you do; your progress is kept.</p>
-      <p class="terms-refund"><strong>4. No refunds.</strong> All payments are final. <strong>No refunds will be given</strong> once payment has been made, including if you stop using the site before your 6 months are up.</p>
+      <p><strong>1. What this is.</strong> JINtelligence (formerly Apex Learning Academy) is a paid maths, English and science practice site covering the Year 7 Victorian Curriculum. Access costs <strong>$5 AUD for 1 month or $15 AUD for 6 months</strong> per account, whichever plan you choose when you sign up.</p>
+      <p><strong>2. Payment.</strong> Payment is <strong>cash in hand only</strong>, paid directly to the site owner. No card, bank transfer or online payments are accepted, and nothing is charged through this website. Accounts are unlocked by hand by the owner, so <strong>it may take a while for your account to be unlocked</strong> after you've paid (usually within a few days). Your plan (1 month or 6 months) starts from the day your account is unlocked.</p>
+      <p><strong>3. Renewing.</strong> To keep using the site after your plan ends, pay for another plan ($5 for 1 month or $15 for 6 months) cash in hand. If you don't renew, your account is paused until you do; your progress is kept.</p>
+      <p class="terms-refund"><strong>4. No refunds.</strong> All payments are final. <strong>No refunds will be given</strong> once payment has been made, including if you stop using the site before your plan is up.</p>
       <p><strong>5. Accounts.</strong> One account is for one person only. You must not share your login with friends or family, or resell your account. You are responsible for keeping your password private.</p>
       <p><strong>6. Using the AI.</strong> The AI tutor, essay feedback, evidence and AI-made tests are there to help you learn. Do not hand in AI-written work as your own at school. The AI can make mistakes, so check important facts, and always check evidence with its source before you quote it.</p>
       <p><strong>7. Behaviour.</strong> Be respectful. Usernames, feedback messages and anything you type into the site must not be rude, offensive, bullying or inappropriate. This includes tests you share publicly: everyone with an account can see and take a public test, along with your name unless you choose to hide it. The site owner can remove any public test. Accounts that break this rule may be suspended without a refund. Your username and points can be seen by other users on the leaderboard. If you hide your points in Settings, your name is hidden too and you show as "Hidden player".</p>
@@ -258,32 +263,33 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/data.js?v=20261116a"></script>
-<script src="js/lessons.js?v=20261116a"></script>
-<script src="js/visuals.js?v=20261116a"></script>
-<script src="js/sci-visuals.js?v=20261116a"></script>
-<script src="js/science.js?v=20261116a"></script>
-<script src="js/history-geo.js?v=20261116a"></script>
-<script src="js/bank.js?v=20261116a"></script>
-<script src="js/topics-more.js?v=20261116a"></script>
-<script src="js/challenge.js?v=20261116a"></script>
-<script src="js/coverage.js?v=20261116a"></script>
-<script src="js/problems.js?v=20261116a"></script>
-<script src="js/year8-10.js?v=20261116a"></script>
-<script src="js/uploads.js?v=20261116a"></script>
-<script src="js/study.js?v=20261116a"></script>
-<script src="js/saved-tests.js?v=20261116a"></script>
-<script src="js/review.js?v=20261116a"></script>
-<script src="js/teacher.js?v=20261116a"></script>
-<script src="js/parent.js?v=20261116a"></script>
-<script src="js/voice.js?v=20261116a"></script>
-<script src="js/notes.js?v=20261116a"></script>
-<script src="js/public-tests.js?v=20261116a"></script>
-<script src="js/ai-memory.js?v=20261116a"></script>
-<script src="js/calendar.js?v=20261116a"></script>
-<script src="js/game-art.js?v=20261116a"></script>
-<script src="js/games.js?v=20261116a"></script>
-<script src="js/gifts.js?v=20261116a"></script>
-<script src="js/app.js?v=20261116a"></script>
+<script src="js/data.js?v=20261116b"></script>
+<script src="js/lessons.js?v=20261116b"></script>
+<script src="js/visuals.js?v=20261116b"></script>
+<script src="js/sci-visuals.js?v=20261116b"></script>
+<script src="js/science.js?v=20261116b"></script>
+<script src="js/history-geo.js?v=20261116b"></script>
+<script src="js/bank.js?v=20261116b"></script>
+<script src="js/topics-more.js?v=20261116b"></script>
+<script src="js/challenge.js?v=20261116b"></script>
+<script src="js/coverage.js?v=20261116b"></script>
+<script src="js/problems.js?v=20261116b"></script>
+<script src="js/year8-10.js?v=20261116b"></script>
+<script src="js/uploads.js?v=20261116b"></script>
+<script src="js/study.js?v=20261116b"></script>
+<script src="js/saved-tests.js?v=20261116b"></script>
+<script src="js/review.js?v=20261116b"></script>
+<script src="js/results.js?v=20261116b"></script>
+<script src="js/teacher.js?v=20261116b"></script>
+<script src="js/parent.js?v=20261116b"></script>
+<script src="js/voice.js?v=20261116b"></script>
+<script src="js/notes.js?v=20261116b"></script>
+<script src="js/public-tests.js?v=20261116b"></script>
+<script src="js/ai-memory.js?v=20261116b"></script>
+<script src="js/calendar.js?v=20261116b"></script>
+<script src="js/game-art.js?v=20261116b"></script>
+<script src="js/games.js?v=20261116b"></script>
+<script src="js/gifts.js?v=20261116b"></script>
+<script src="js/app.js?v=20261116b"></script>
 </body>
 </html>

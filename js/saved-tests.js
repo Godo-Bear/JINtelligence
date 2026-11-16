@@ -47,6 +47,7 @@ function syncSavedTests() {
       store(decksKey(), decks);
       await pullSavedTests();
       if (typeof pullReview === "function") await pullReview();
+  if (typeof pullTestHistory === "function") await pullTestHistory();
       pushDecks(decks);
     } catch (e) { console.warn("Apex: couldn't sync saved tests —", e.message || e); }
   }, 800);
