@@ -1163,10 +1163,13 @@ function pageTopic(view, t) {
     const right = results.filter((r) => r.correct).length;
     const earned = recordResults(results);
     const kind = right === set.length ? "good" : right === 0 ? "bad" : "info";
+    const wrong = results.map((r, i) => (r.correct ? -1 : i)).filter((i) => i >= 0);
     const actions = $(".row:last-child", form);
     actions.innerHTML = `
       <div class="banner ${kind}" style="flex:1;">${right}/${set.length} correct · +${earned} points${earned ? boostNote(false) : ""}</div>
+      <button class="btn ghost" type="button" id="pdf-set">🖨️ Save as PDF</button>
       <button class="btn" type="button" id="next-set">Next set →</button>`;
+    $("#pdf-set", form).addEventListener("click", () => printTestDialog(`${t.name} — ${DIFF_NAMES[difficulty]}`, set, wrong));
     $("#next-set", form).addEventListener("click", () => { delete form.dataset.checked; newSet(); window.scrollTo({ top: 0, behavior: "smooth" }); });
   });
 
