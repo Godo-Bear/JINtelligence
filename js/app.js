@@ -960,12 +960,20 @@ document.addEventListener("click", (e) => {
   route();
 });
 
+// The Admin link opens this page with ?admin: a separate, stripped-down tab that holds only the Admin panel.
+const ADMIN_ONLY = new URLSearchParams(location.search).has("admin");
+if (ADMIN_ONLY) { document.documentElement.classList.add("admin-only"); document.title = "JINtelligence Admin"; }
+
 function route() {
+  if (ADMIN_ONLY) {
+    if (me && !me.isAdmin) { location.replace(location.pathname + "#/home"); return; }
+    if (location.hash !== "#/admin") history.replaceState(null, "", "?admin#/admin");
+  }
   if (cleanup) { cleanup(); cleanup = null; }
   leaveWarning = null;
   flushPendingAnnouncement();
   lastHash = location.hash;
-  const [page = "home", arg, arg2] = location.hash.replace(/^#\/?/, "").split("/");
+  const [page = "home", arg, arg2] = (ADMIN_ONLY ? "#/admin" : location.hash).replace(/^#\/?/, "").split("/");
   const view = $("#view");
   const pages = { home: pageHome, practice: pagePractice, test: pageTest, games: pageGames, tutor: pageTutor, progress: pageProgress, notes: pageNotes, admin: pageAdmin, teacher: pageTeacher, assignment: pageAssignment, settings: pageSettings };
   const render = pages[page] || pageHome;

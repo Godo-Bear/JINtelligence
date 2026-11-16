@@ -15,15 +15,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261116f">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261116g">
 <!-- Home-screen icon: iPhone/iPad use apple-touch-icon, Android uses the manifest -->
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261116f">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261116g">
 <meta name="apple-mobile-web-app-title" content="JINtelligence">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#8A1C3C">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="css/styles.css?v=20261116f">
+<link rel="stylesheet" href="css/styles.css?v=20261116g">
 <script>
   // Apply the saved theme before first paint to avoid a flash.
   try { const t = localStorage.getItem("apex-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
@@ -33,11 +33,11 @@
 <body>
 
 <template id="logo-tpl">
-  <img class="logo-mark" src="assets/logo.svg?v=20261116f" alt="">
+  <img class="logo-mark" src="assets/logo.svg?v=20261116g" alt="">
 </template>
 <template id="crest-tpl">
-  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261116f" alt="JINtelligence">
-  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261116f" alt="JINtelligence">
+  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261116g" alt="JINtelligence">
+  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261116g" alt="JINtelligence">
 </template>
 
 <!-- Loading -->
@@ -153,7 +153,7 @@
         <a class="foot-icon" href="#/settings" data-route="settings"><span class="ico">⚙️</span>Settings</a>
         <button class="foot-icon" type="button" data-open="feedback"><span class="ico">💬</span>Feedback</button>
         <button class="foot-icon" type="button" data-open="terms"><span class="ico">📄</span>Terms</button>
-        <a class="foot-icon hidden" id="foot-admin" href="#/admin" target="_blank" rel="noopener" data-route="admin"><span class="ico">🛠</span>Admin</a>
+        <a class="foot-icon hidden" id="foot-admin" href="?admin#/admin" target="_blank" rel="noopener"><span class="ico">🛠</span>Admin</a>
         <a class="foot-icon hidden" id="foot-teacher" href="#/teacher" data-route="teacher"><span class="ico">🍎</span>Teacher</a>
       </div>
     </div>
@@ -168,6 +168,7 @@
         <button class="btn ghost" data-open="menu" aria-label="Menu">⋯</button>
       </div>
     </div>
+    <div class="admin-bar"><span class="wordmark"><b>JIN</b>telligence</span><strong>🛠 Admin panel</strong><a class="btn ghost" href="./">Open the site ↗</a></div>
     <div id="event-bar" class="hidden"></div>
     <div id="view"></div>
     <footer class="owner-mark">© 2026 Jayden Narayan · JINtelligence · All rights reserved</footer>
@@ -196,7 +197,7 @@
 <div id="modal-menu" class="modal hidden">
   <div class="card stack">
     <div class="row between"><h2 style="margin:0;">Menu</h2><button class="btn ghost" data-close>✕</button></div>
-    <a class="btn secondary block hidden" id="menu-admin" href="#/admin" target="_blank" rel="noopener">Admin</a>
+    <a class="btn secondary block hidden" id="menu-admin" href="?admin#/admin" target="_blank" rel="noopener">Admin</a>
     <a class="btn secondary block hidden" id="menu-teacher" href="#/teacher">🍎 Teacher</a>
     <button class="btn secondary block" data-open="feedback">Send feedback</button>
     <a class="btn secondary block" href="#/notes" id="menu-notes">🗓️ Notes &amp; calendar</a>
@@ -273,34 +274,34 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/data.js?v=20261116f"></script>
-<script src="js/lessons.js?v=20261116f"></script>
-<script src="js/visuals.js?v=20261116f"></script>
-<script src="js/sci-visuals.js?v=20261116f"></script>
-<script src="js/science.js?v=20261116f"></script>
-<script src="js/history-geo.js?v=20261116f"></script>
-<script src="js/bank.js?v=20261116f"></script>
-<script src="js/topics-more.js?v=20261116f"></script>
-<script src="js/challenge.js?v=20261116f"></script>
-<script src="js/coverage.js?v=20261116f"></script>
-<script src="js/problems.js?v=20261116f"></script>
-<script src="js/year8-10.js?v=20261116f"></script>
-<script src="js/uploads.js?v=20261116f"></script>
-<script src="js/study.js?v=20261116f"></script>
-<script src="js/saved-tests.js?v=20261116f"></script>
-<script src="js/review.js?v=20261116f"></script>
-<script src="js/results.js?v=20261116f"></script>
-<script src="js/devices.js?v=20261116f"></script>
-<script src="js/teacher.js?v=20261116f"></script>
-<script src="js/parent.js?v=20261116f"></script>
-<script src="js/voice.js?v=20261116f"></script>
-<script src="js/notes.js?v=20261116f"></script>
-<script src="js/public-tests.js?v=20261116f"></script>
-<script src="js/ai-memory.js?v=20261116f"></script>
-<script src="js/calendar.js?v=20261116f"></script>
-<script src="js/game-art.js?v=20261116f"></script>
-<script src="js/games.js?v=20261116f"></script>
-<script src="js/gifts.js?v=20261116f"></script>
-<script src="js/app.js?v=20261116f"></script>
+<script src="js/data.js?v=20261116g"></script>
+<script src="js/lessons.js?v=20261116g"></script>
+<script src="js/visuals.js?v=20261116g"></script>
+<script src="js/sci-visuals.js?v=20261116g"></script>
+<script src="js/science.js?v=20261116g"></script>
+<script src="js/history-geo.js?v=20261116g"></script>
+<script src="js/bank.js?v=20261116g"></script>
+<script src="js/topics-more.js?v=20261116g"></script>
+<script src="js/challenge.js?v=20261116g"></script>
+<script src="js/coverage.js?v=20261116g"></script>
+<script src="js/problems.js?v=20261116g"></script>
+<script src="js/year8-10.js?v=20261116g"></script>
+<script src="js/uploads.js?v=20261116g"></script>
+<script src="js/study.js?v=20261116g"></script>
+<script src="js/saved-tests.js?v=20261116g"></script>
+<script src="js/review.js?v=20261116g"></script>
+<script src="js/results.js?v=20261116g"></script>
+<script src="js/devices.js?v=20261116g"></script>
+<script src="js/teacher.js?v=20261116g"></script>
+<script src="js/parent.js?v=20261116g"></script>
+<script src="js/voice.js?v=20261116g"></script>
+<script src="js/notes.js?v=20261116g"></script>
+<script src="js/public-tests.js?v=20261116g"></script>
+<script src="js/ai-memory.js?v=20261116g"></script>
+<script src="js/calendar.js?v=20261116g"></script>
+<script src="js/game-art.js?v=20261116g"></script>
+<script src="js/games.js?v=20261116g"></script>
+<script src="js/gifts.js?v=20261116g"></script>
+<script src="js/app.js?v=20261116g"></script>
 </body>
 </html>

@@ -1431,3 +1431,11 @@ body.voice-open { overflow: hidden; }
 .choice.plan b { font-size: 17px; }
 .choice.plan small { font-size: 11.5px; font-weight: 500; color: var(--muted); }
 .choice.slim { padding: 6px; font-size: 13px; font-weight: 500; }
+
+/* Admin-only tab (opened from the Admin link with ?admin): just the Admin panel, no site navigation. */
+.admin-bar { display: none; }
+html.admin-only .admin-bar { display: flex; align-items: center; gap: 12px; padding: 10px 0 14px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+html.admin-only .admin-bar .btn { margin-left: auto; }
+html.admin-only .app { grid-template-columns: 1fr; }
+html.admin-only .sidebar, html.admin-only .tabbar, html.admin-only .mobile-top, html.admin-only #event-bar, html.admin-only .owner-mark { display: none !important; }
+html.admin-only main { max-width: 1100px; margin: 0 auto; width: 100%; padding-bottom: 40px; }
