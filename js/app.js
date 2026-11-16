@@ -218,7 +218,7 @@ async function aiErrorInfo(err) {
 const AI_TRIES = 3;
 
 // ---------------- Plans (chosen at signup, paid cash in hand) ----------------
-const PLANS = { 1: { months: 1, price: 5, label: "1 month" }, 6: { months: 6, price: 15, label: "6 months" } };
+const PLANS = { 1: { months: 1, price: 7, label: "1 month" }, 6: { months: 6, price: 15, label: "6 months" } };
 const planInfo = (months) => PLANS[months] || PLANS[6];
 const planText = (months) => { const p = planInfo(months); return `$${p.price} for ${p.label}`; };
 const ROLES = { student: "Student", parent: "Parent / guardian", teacher: "Teacher" };
@@ -495,7 +495,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
   if (authMode === "signup") {
     if (name.length < 3) return setMsg(msg, "Display name needs at least 3 characters.", "error");
     if (!$('input[name="auth-role"]:checked')) return setMsg(msg, "Please choose whether you are a student, parent or teacher.", "error");
-    if (!$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $5 for 1 month or $15 for 6 months.", "error");
+    if (!$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $7 for 1 month or $15 for 6 months.", "error");
     if (!$("#auth-terms").checked) return setMsg(msg, "Please agree to the Terms & Conditions.", "error");
     if ($("#auth-age-under").checked && !$("#auth-parent-consent").checked) {
       return setMsg(msg, "A parent or guardian needs to agree on your behalf — please tick the box.", "error");
@@ -517,6 +517,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
         let ins = await sb.from("profiles").insert({ ...base, plan_months: planMonths, account_type: role });
         if (ins.error) ins = await sb.from("profiles").insert({ ...base, plan_months: planMonths });
         if (ins.error) await sb.from("profiles").insert(base);
+        claimNewSession = true;
         await handleAuthenticatedUser(data.user);
       } else {
         $$("[data-auth-mode]")[0].click();
@@ -527,6 +528,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
     } else {
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      claimNewSession = true;
       await handleAuthenticatedUser(data.user);
     }
   } catch (err) {
@@ -612,29 +614,30 @@ async function startCheckout(btn, statusEl) {
 }
 $("#paywall-pay-btn").addEventListener("click", () => startCheckout($("#paywall-pay-btn"), $("#paywall-pay-status")));
 
+// Newer features add profile columns; this asks for them all and, if the database doesn't have one yet
+// ("column ... does not exist"), quietly drops just that column and asks again — so the site keeps working
+// before the matching SQL has been run.
+async function selectDroppingMissing(run, required, optional) {
+  let opt = [...optional], result;
+  for (let i = 0; i <= optional.length; i++) {
+    result = await run([...required, ...opt].join(", "));
+    if (!result.error || result.error.code === "PGRST116") return result;
+    const m = /column\s+(?:\w+\.)?(\w+)\s+does not exist/i.exec(result.error.message || "");
+    if (!m || !opt.includes(m[1])) return result;
+    opt = opt.filter((c) => c !== m[1]);
+  }
+  return result;
+}
+let claimNewSession = false; // set when the person has just typed their password (a fresh login on this device)
+
 async function handleAuthenticatedUser(user) {
   authUser = { id: user.id, email: user.email };
-  let { data: profile, error } = await sb.from("profiles")
-    .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, is_teacher, ai_bonus_pct, plan_months, account_type, show_points")
-    .eq("id", user.id).single();
-  if (error && error.code !== "PGRST116") {
-    // Databases without account_type yet.
-    ({ data: profile, error } = await sb.from("profiles")
-      .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, is_teacher, ai_bonus_pct, plan_months, show_points")
-      .eq("id", user.id).single());
-  }
-  if (error && error.code !== "PGRST116") {
-    // Databases without plan_months yet: retry the full list without it before falling back further.
-    ({ data: profile, error } = await sb.from("profiles")
-      .select("username, has_paid, paid_until, points, xp, test_points, progress, friends, is_admin, is_teacher, ai_bonus_pct, show_points")
-      .eq("id", user.id).single());
-  }
-  if (error && error.code !== "PGRST116") {
-    // Older databases may not have test_points/is_teacher/ai_bonus_pct yet.
-    ({ data: profile, error } = await sb.from("profiles")
-      .select("username, has_paid, paid_until, points, xp, progress, friends, is_admin")
-      .eq("id", user.id).single());
-  }
+  const fresh = claimNewSession; claimNewSession = false;
+  let { data: profile, error } = await selectDroppingMissing(
+    (cols) => sb.from("profiles").select(cols).eq("id", user.id).single(),
+    ["username", "has_paid", "paid_until", "points", "xp", "progress", "friends", "is_admin"],
+    ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "account_type", "active_session", "allow_multi_device", "show_points"],
+  );
   if (error?.code === "PGRST116") {
     const chosen = store(planKey(user.email)) || 6;
     const row = { id: user.id, email: user.email, has_paid: false, points: 0, progress: {} };
@@ -649,6 +652,9 @@ async function handleAuthenticatedUser(user) {
   const active = profile.has_paid && (!profile.paid_until || new Date(profile.paid_until) > new Date());
   if (!active) return showPaywall(profile.plan_months || store(planKey(user.email)) || 6);
 
+  const claim = await claimDevice(profile, fresh);
+  if (!claim.ok) { await logout(); showDeviceKickedMessage(); return; }
+
   me = {
     name: (profile.username || "").trim() || user.email.split("@")[0],
     points: profile.points || 0,
@@ -661,6 +667,7 @@ async function handleAuthenticatedUser(user) {
     aiBonusPct: profile.ai_bonus_pct || 0,
     planMonths: profile.plan_months || 6,
     accountType: ROLES[profile.account_type] ? profile.account_type : "student",
+    multiDevice: !!profile.is_admin || !!profile.allow_multi_device,
     paidUntil: profile.paid_until || null,
     showPoints: profile.show_points !== false,
   };
@@ -691,6 +698,7 @@ async function loadCustomQuestions() {
 
 // ---------------- App shell & routing ----------------
 function enterApp() {
+  if (typeof startDeviceWatch === "function") startDeviceWatch();
   const items = [...NAV, { route: "notes", label: "Notes & calendar", icon: "🗓️" }];
   $("#nav").innerHTML = items.map((n) =>
     `<a class="nav-link" href="#/${n.route}" data-route="${n.route}"><span class="ico">${n.icon}</span><span>${n.label}</span></a>`).join("");
@@ -747,14 +755,15 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-16a";
+const TERMS_VERSION = "2026-11-16b";
 const TERMS_CHANGES = [
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
   "New — calendar: put your tests, assignments and reminders on the calendar (Notes & calendar). It's saved to your account, and the AI can see what's coming up so it can help you prepare (you can turn this off).",
   "New — AI memory: your AI tutor chats are saved to your account, and the AI can remember short notes about you (like topics you find tricky) to help you next time. You can see, delete or turn this off in Settings.",
   "New — public tests: you can share tests with everyone on JINtelligence. Shared tests show your name (unless you turn it off), must follow the behaviour rules, and can be removed by the site owner.",
-  "New — plans: choose $5 for 1 month or $15 for 6 months when you sign up, paid cash in hand to the site owner. Your plan shows in Settings.",
+  "New — plans: choose $7 for 1 month or $15 for 6 months when you sign up, paid cash in hand to the site owner. Your plan shows in Settings.",
+  "New — one device: your account can be logged in on one device at a time. Logging in on a new device logs you out of the old one, unless the site owner allows your account to use several devices.",
   "Accounts are unlocked by hand, so it may take a while after paying. No refunds.",
   "Using the AI: it's for learning. Don't hand in AI-written work as your own.",
   "Behaviour: be respectful, or your account may be suspended.",
@@ -3846,7 +3855,7 @@ function pageAdmin(view) {
         <div class="list-row" style="${a.deleted ? "opacity:.5;" : ""}">
           ${a.deleted ? "" : `<input type="checkbox" class="pick-acct" data-pick="${a.id}" aria-label="Tick ${esc(a.username || a.email)} for gifts"${picked.has(a.id) ? " checked" : ""}>`}
           <div class="grow">
-            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}${a.is_teacher ? ` <span class="tag">teacher</span>` : ""} <span class="tag">${esc(planInfo(a.plan_months).label)} plan</span>${a.account_type === "parent" ? ` <span class="tag">parent</span>` : ""}${a.account_type === "teacher" && !a.is_teacher ? ` <span class="tag bad">teacher — awaiting verification</span>` : ""}
+            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}${a.is_teacher ? ` <span class="tag">teacher</span>` : ""} <span class="tag">${esc(planInfo(a.plan_months).label)} plan</span>${a.allow_multi_device ? ` <span class="tag good">multi-device</span>` : ""}${a.account_type === "parent" ? ` <span class="tag">parent</span>` : ""}${a.account_type === "teacher" && !a.is_teacher ? ` <span class="tag bad">teacher — awaiting verification</span>` : ""}
             <div class="muted small">${esc(a.email)} · ${a.points || 0} pts · ${a.xp || 0} XP${a.game_data ? ` · 🏅 ${Object.keys(a.game_data.badges || {}).length} badges` : ""} · ${attemptedOf(a.progress)} answered · seen ${timeAgo(a.last_seen)}</div>
           </div>
           ${statusTag(a)}
@@ -3859,6 +3868,7 @@ function pageAdmin(view) {
               ${btn("add-xp", "+10 XP")}${btn("set-xp", "Set XP…")}
               ${btn("renew", "Add months…")}
               ${btn("toggle-admin", a.is_admin ? "Remove admin" : "Make admin")}
+              ${btn("toggle-multi", a.allow_multi_device ? "Multi-device: ON" : "Allow multiple devices")}
               ${btn("toggle-teacher", a.is_teacher ? "Remove teacher" : a.account_type === "teacher" ? "✅ Verify teacher" : "Make teacher")}
               ${btn("set-ai-bonus", `AI bonus${a.ai_bonus_pct ? ` (+${a.ai_bonus_pct}%)` : "…"}`)}
               ${btn("reset", "Reset progress")}
@@ -3963,6 +3973,9 @@ function pageAdmin(view) {
       case "toggle-admin":
         if (confirm(`${a.is_admin ? "Remove admin from" : "Make admin:"} ${name}?`)) update = { is_admin: !a.is_admin };
         break;
+      case "toggle-multi":
+        if (confirm(`${a.allow_multi_device ? "Limit" : "Let"} ${name} ${a.allow_multi_device ? "to one device at a time" : "log in on several devices at once"}?`)) update = { allow_multi_device: !a.allow_multi_device };
+        break;
       case "toggle-teacher":
         if (confirm(`${a.is_teacher ? "Remove teacher from" : a.account_type === "teacher" ? "Verify as a teacher:" : "Make teacher:"} ${name}?`)) update = { is_teacher: !a.is_teacher };
         break;
@@ -4001,13 +4014,11 @@ function pageAdmin(view) {
   });
 
   (async () => {
-    let { data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, ai_bonus_pct, plan_months, account_type, progress, last_seen, deleted, game_data");
-    if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, ai_bonus_pct, plan_months, progress, last_seen, deleted, game_data"));
-    if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, ai_bonus_pct, progress, last_seen, deleted, game_data"));
-    if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, is_teacher, progress, last_seen, deleted, game_data"));
-    if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress, last_seen, deleted, game_data"));
-    if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress, last_seen, deleted"));
-    if (error) ({ data, error } = await sb.from("profiles").select("id, username, email, points, xp, has_paid, paid_until, is_admin, progress"));
+    const { data, error } = await selectDroppingMissing(
+      (cols) => sb.from("profiles").select(cols),
+      ["id", "username", "email", "points", "xp", "has_paid", "paid_until", "is_admin", "progress"],
+      ["is_teacher", "ai_bonus_pct", "plan_months", "account_type", "allow_multi_device", "last_seen", "deleted", "game_data"],
+    );
     if (error) { $("#accts", view).innerHTML = `<p class="muted">Couldn't load accounts.</p>`; return; }
     accounts = (data || []).sort((x, y) => (!!x.deleted - !!y.deleted) || (y.points || 0) - (x.points || 0));
     drawStats();
