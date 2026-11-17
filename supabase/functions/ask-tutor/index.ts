@@ -2,6 +2,8 @@
 // Paste into Supabase → Edge Functions → ask-tutor → Code, then press Deploy.
 // Uses the GEMINI_API_KEY secret that is already set up.
 
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
 const MODEL = 'gemini-3.5-flash';
 
 const corsHeaders = {
@@ -36,6 +38,18 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
+    // Parent accounts are view-only: they can't use the AI (so one can't be handed to a child as a free account).
+    // If the check itself fails for any reason we let the request through, so students are never locked out by a glitch.
+    try {
+      const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+      const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+      const { data: who } = await admin.auth.getUser(jwt);
+      if (who?.user) {
+        const { data: prof } = await admin.from('profiles').select('account_type, is_admin').eq('id', who.user.id).maybeSingle();
+        if (prof?.account_type === 'parent' && !prof?.is_admin) return json({ error: 'Parent accounts are view-only. The AI tutor is for student accounts.' }, 403);
+      }
+    } catch (_) { /* fail open */ }
+
     const { question, image, imageMimeType, allowDiagram } = await req.json();
     if (!question || typeof question !== 'string') return json({ error: 'No question provided' }, 400);
     if (question.length > 60000) return json({ error: 'That message is too long — try a shorter one.' }, 400);

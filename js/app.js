@@ -702,10 +702,13 @@ async function loadCustomQuestions() {
 // ---------------- App shell & routing ----------------
 function enterApp() {
   if (typeof startDeviceWatch === "function") startDeviceWatch();
-  const items = [...NAV, { route: "notes", label: "Notes & calendar", icon: "🗓️" }];
+  const parent = isParent();
+  const navItems = parent ? [{ route: "home", label: "Home", icon: "🏠" }, { route: "practice", label: "Topics", icon: "📚" }, { route: "progress", label: "Grades", icon: "📈" }] : NAV;
+  const items = parent ? navItems : [...NAV, { route: "notes", label: "Notes & calendar", icon: "🗓️" }];
+  $("#menu-notes").classList.toggle("hidden", parent);
   $("#nav").innerHTML = items.map((n) =>
     `<a class="nav-link" href="#/${n.route}" data-route="${n.route}"><span class="ico">${n.icon}</span><span>${n.label}</span></a>`).join("");
-  $("#tabbar").innerHTML = NAV.map((n) =>
+  $("#tabbar").innerHTML = navItems.map((n) =>
     `<a href="#/${n.route}" data-route="${n.route}"><span class="ico">${n.icon}</span><span>${n.label}</span></a>`).join("");
   $("#menu-admin").classList.toggle("hidden", !me.isAdmin);
   $("#foot-admin").classList.toggle("hidden", !me.isAdmin);
@@ -973,15 +976,20 @@ function route() {
   leaveWarning = null;
   flushPendingAnnouncement();
   lastHash = location.hash;
-  const [page = "home", arg, arg2] = (ADMIN_ONLY ? "#/admin" : location.hash).replace(/^#\/?/, "").split("/");
+  let [page = "home", arg, arg2] = (ADMIN_ONLY ? "#/admin" : location.hash).replace(/^#\/?/, "").split("/");
   const view = $("#view");
+  const parentView = isParent();
+  if (parentView && !PARENT_PAGES.includes(page)) { toast("Parent accounts can see topics and grades — that part is for students."); history.replaceState(null, "", "#/home"); page = "home"; }
+  if (parentView && page === "practice") arg = undefined;
   const pages = { home: pageHome, practice: pagePractice, test: pageTest, games: pageGames, tutor: pageTutor, progress: pageProgress, notes: pageNotes, admin: pageAdmin, teacher: pageTeacher, assignment: pageAssignment, settings: pageSettings };
+  if (parentView) { pages.home = pageParentHome; pages.progress = pageParentProgress; }
   const render = pages[page] || pageHome;
   const navRoute = pages[page] ? page : "home";
   $$("[data-route]").forEach((a) => a.classList.toggle("active", a.dataset.route === navRoute));
   view.innerHTML = "";
   view.closest("main").classList.remove("with-notes", "wide");
   render(view, arg, arg2);
+  if (parentView && page === "practice") lockTopicsForParent(view);
   window.scrollTo(0, 0);
 }
 
@@ -3898,6 +3906,7 @@ function pageAdmin(view) {
               ${btn("add-xp", "+10 XP")}${btn("set-xp", "Set XP…")}
               ${btn("renew", "Add / take months…")}
               ${btn("toggle-admin", a.is_admin ? "Remove admin" : "Make admin")}
+              ${btn("set-type", `Account type (${ROLES[a.account_type] ? ROLES[a.account_type].split(" ")[0] : "Student"})…`)}
               ${btn("set-level", `Year level${a.year_level && LEARN_LEVELS[a.year_level] ? ` (${LEARN_LEVELS[a.year_level].short || LEARN_LEVELS[a.year_level].label})` : "…"}`)}
               ${btn("toggle-multi", a.allow_multi_device ? "Multi-device: ON" : "Allow multiple devices")}
               ${btn("toggle-teacher", a.is_teacher ? "Remove teacher" : a.account_type === "teacher" ? "✅ Verify teacher" : "Make teacher")}
@@ -4032,6 +4041,13 @@ function pageAdmin(view) {
       case "toggle-admin":
         if (confirm(`${a.is_admin ? "Remove admin from" : "Make admin:"} ${name}?`)) update = { is_admin: !a.is_admin };
         break;
+      case "set-type": {
+        const v = (prompt(`Account type for ${name}: type student, parent or teacher.\n(A parent account is view-only — topics and their child's grades.)`, a.account_type || "student") || "").trim().toLowerCase();
+        if (!v) break;
+        if (!ROLES[v]) { alert("Type student, parent or teacher."); break; }
+        update = { account_type: v };
+        break;
+      }
       case "set-level": {
         const picked = await askLevel(name, a.year_level);
         if (picked !== undefined) update = { year_level: picked };

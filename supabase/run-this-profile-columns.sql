@@ -50,6 +50,7 @@ begin
   new.ai_bonus_pct := old.ai_bonus_pct;
   new.allow_multi_device := old.allow_multi_device;
   new.year_level := old.year_level;
+  new.account_type := old.account_type; -- chosen at sign-up; only an admin can change it (so a parent account can't become a student one)
   new.deleted := old.deleted;
   return new;
 end;
