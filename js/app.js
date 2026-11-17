@@ -680,6 +680,7 @@ async function handleAuthenticatedUser(user, retried = false) {
     paidUntil: profile.paid_until || null,
     showPoints: profile.show_points !== false,
   };
+  if (me.accountType === "student" && typeof ensureParentCode === "function") ensureParentCode(); // every student has a parent code ready
   try { await fetchGameData(user.id); cloudGame = true; } catch (e) { cloudGame = false; } // needs supabase/game-data.sql
   await loadCustomQuestions();
   enterApp();
@@ -3504,7 +3505,7 @@ function pageSettings(view) {
 
     <div class="section-label">👨‍👩‍👧 Parent access</div>
     <div class="card stack">
-      <p class="muted small" style="margin:0;">Let a parent or guardian see your progress (read-only — they can't change anything or see your writing, notes or AI chats).</p>
+      <p class="muted small" style="margin:0;">Your parent or guardian can see your progress with your code below (read-only — they can't change anything or see your writing, notes or AI chats).</p>
       <div id="set-parent-code"><p class="muted small" style="margin:0;">Loading…</p></div>
       <hr style="border:none; border-top:1px solid var(--line); margin:4px 0;">
       <p class="muted small" style="margin:0;">Got a code from your child? Enter it here to see their progress.</p>
@@ -3665,21 +3666,25 @@ function pageSettings(view) {
   async function drawParentCode() {
     const box = $("#set-parent-code", view);
     if (!box) return;
-    const code = await myParentCode();
+    let code = await myParentCode();
+    if (code === "") { await makeParentCode(); code = await myParentCode(); } // there's always a code ready for a parent
     box.innerHTML = code === null
       ? `<p class="muted small" style="margin:0;">Couldn't load this — parent access may not be set up on this site yet.</p>`
       : code
-        ? `<div class="row between"><span>Your code: <code style="font-size:16px; letter-spacing:1px;">${esc(code)}</code></span><button class="btn ghost sm" id="parent-code-revoke">Revoke access</button></div>`
-        : `<button class="btn secondary sm" id="parent-code-make">Generate a code</button>`;
+        ? `<div class="row between"><span>Your code: <code style="font-size:16px; letter-spacing:1px;">${esc(code)}</code></span><span class="row" style="gap:6px;"><button class="btn ghost sm" id="parent-code-copy">Copy</button><button class="btn ghost sm" id="parent-code-revoke">New code</button></span></div>
+           <p class="muted small" style="margin:6px 0 0;">Give this code to your parent or guardian. They enter it on their parent account. "New code" unlinks anyone already linked and makes a fresh code.</p>`
+        : `<button class="btn secondary sm" id="parent-code-make">Make a code</button>`;
+    $("#parent-code-copy", box)?.addEventListener("click", () => { navigator.clipboard?.writeText(code).then(() => toast("Code copied"), () => toast(`Your code is ${code}`)); });
     $("#parent-code-make", box)?.addEventListener("click", async () => {
       $("#parent-code-make", box).disabled = true;
       await makeParentCode();
       drawParentCode();
     });
     $("#parent-code-revoke", box)?.addEventListener("click", async () => {
-      if (!confirm("Revoke parent access? Anyone already linked will stop being able to see your progress.")) return;
+      if (!confirm("Make a new code? Anyone already linked will stop being able to see your progress, until they enter the new code.")) return;
       await revokeParentCode();
-      toast("Parent access revoked");
+      await makeParentCode();
+      toast("New code made — parents need to enter it again");
       drawParentCode();
     });
   }

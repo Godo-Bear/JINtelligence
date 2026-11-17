@@ -13,7 +13,20 @@ async function myParentCode() {
   } catch (e) { return null; }
 }
 async function makeParentCode() {
-  try { await sb.from("parent_links").insert({ student_id: authUser.id, code: randomJoinCode() }); } catch (e) { /* best effort */ }
+  // A few tries in case a random code happens to be taken already.
+  for (let i = 0; i < 4; i++) {
+    try {
+      const { error } = await sb.from("parent_links").insert({ student_id: authUser.id, code: randomJoinCode() });
+      if (!error) return true;
+    } catch (e) { return false; }
+  }
+  return false;
+}
+// Every student account gets a parent code automatically, so a parent can always link without the child having to set anything up.
+async function ensureParentCode() {
+  try {
+    if ((await myParentCode()) === "") await makeParentCode();
+  } catch (e) { /* best effort */ }
 }
 async function revokeParentCode() {
   try {
