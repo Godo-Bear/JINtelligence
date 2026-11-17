@@ -599,26 +599,6 @@ $("#paywall-recheck").addEventListener("click", async () => {
   else showAuthPanel("main");
 });
 
-// Starts an online card payment (Stripe Checkout) via the "create-checkout-session" edge function.
-// Needs the site owner's own Stripe setup to actually work — see the setup notes — and fails politely
-// (rather than breaking anything) if that hasn't been done yet.
-async function startCheckout(btn, statusEl) {
-  btn.disabled = true;
-  statusEl.textContent = "";
-  try {
-    const { data, error } = await sb.functions.invoke("create-checkout-session", { body: { origin: location.origin } });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    if (!data?.url) throw new Error("No checkout link was returned.");
-    window.location.href = data.url;
-    return; // leaving the page — no need to re-enable the button
-  } catch (e) {
-    statusEl.textContent = e.message || "Couldn't start checkout — try again, or pay cash in hand.";
-  }
-  btn.disabled = false;
-}
-$("#paywall-pay-btn").addEventListener("click", () => startCheckout($("#paywall-pay-btn"), $("#paywall-pay-status")));
-
 // Newer features add profile columns; this asks for them all and, if the database doesn't have one yet
 // ("column ... does not exist"), quietly drops just that column and asks again — so the site keeps working
 // before the matching SQL has been run.
@@ -3538,10 +3518,6 @@ function pageSettings(view) {
       <p style="margin:0;">Account type: <strong>${esc(ROLES[me.accountType])}</strong>${me.accountType === "teacher" && !me.isTeacher ? ` <span class="tag bad">awaiting verification by the site owner</span>` : me.isTeacher ? ` <span class="tag good">verified</span>` : ""}</p>
       <p style="margin:0;">Your plan: <strong>${esc(planInfo(me.planMonths).label)}</strong> <span class="muted small">(${esc(planText(me.planMonths))})</span></p>
       <p class="muted small" style="margin:0;">To renew, pay <strong>$${planInfo(me.planMonths).price} cash in hand</strong> to the site owner for another ${esc(planInfo(me.planMonths).label)}. Accounts are unlocked by hand, so it may take a while.</p>
-      <div class="row" style="flex-wrap:nowrap; align-items:center;">
-        <button class="btn secondary" id="pay-online-btn">💳 Pay online with card</button>
-        <span class="small muted" id="pay-online-status"></span>
-      </div>
     </div>
 
     <div class="section-label">Your level</div>
@@ -3666,8 +3642,6 @@ function pageSettings(view) {
     $("#set-pass", view).value = "";
     toast("Password changed");
   });
-
-  $("#pay-online-btn", view)?.addEventListener("click", () => startCheckout($("#pay-online-btn", view), $("#pay-online-status", view)));
 
   $("#set-join-btn", view)?.addEventListener("click", async () => {
     const btn = $("#set-join-btn", view), status = $("#set-join-status", view);
