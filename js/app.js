@@ -3784,6 +3784,12 @@ function pageAdmin(view) {
     <div class="page-head"><h1>Admin</h1><p>Manage accounts, feedback and questions.</p></div>
     <div class="grid cols-3" id="admin-stats"></div>
 
+    <div class="section-label">👥 Accounts</div>
+    <div class="card">
+      <input type="text" id="acct-search" placeholder="Search name or email" style="margin-bottom:10px;">
+      <div id="accts"><p class="muted">Loading…</p></div>
+    </div>
+
     <div class="section-label">📢 Announcements</div>
     <div class="card stack">
       <p class="muted small" style="margin:0;">Send a message to everyone. It slides in once at the top of the screen in big, bold text for each person (after they finish any test they're doing). Remove it to stop people who haven't seen it yet from getting it.</p>
@@ -3824,18 +3830,12 @@ function pageAdmin(view) {
 
     <div class="section-label">🎁 Give to lots of people</div>
     <div class="card stack">
-      <p class="muted small" style="margin:0;">Give or take points, XP, badges, a rank, a day streak or extra time. Each person sees a gift pop-up. To give to just one person, use <b>Manage → 🎁 Give / take</b> below.</p>
+      <p class="muted small" style="margin:0;">Give or take points, XP, badges, a rank, a day streak or extra time. Each person sees a gift pop-up. To give to just one person, use <b>Manage → 🎁 Give / take</b> in Accounts above.</p>
       <div class="segmented" id="give-who" role="radiogroup" aria-label="Who gets it">
         <button type="button" class="active" data-who="all">Everyone</button>
-        <button type="button" data-who="ticked">People I tick below (<span id="give-n">0</span>)</button>
+        <button type="button" data-who="ticked">People I tick in Accounts (<span id="give-n">0</span>)</button>
       </div>
       ${giveFormHTML("all")}
-    </div>
-
-    <div class="section-label">Accounts</div>
-    <div class="card">
-      <input type="text" id="acct-search" placeholder="Search name or email" style="margin-bottom:10px;">
-      <div id="accts"><p class="muted">Loading…</p></div>
     </div>
 
     <div class="section-label row between" style="margin-bottom:10px;">
@@ -3901,21 +3901,31 @@ function pageAdmin(view) {
           ${statusTag(a)}
           <button class="btn ghost sm" data-toggle="${a.id}">${open.has(a.id) ? "Close" : "Manage"}</button>
           ${open.has(a.id) ? `
-            <div class="row" style="flex-basis:100%; gap:6px;">
-              ${btn("give", giving.has(a.id) ? "Close gifts" : "🎁 Give / take", "")}
-              ${btn("fix-login", "🔑 Fix login")}
-              ${btn("add-points", "+10 pts")}${btn("set-points", "Set pts…")}
-              ${btn("add-xp", "+10 XP")}${btn("set-xp", "Set XP…")}
-              ${btn("renew", "Add / take months…")}
-              ${btn("toggle-admin", a.is_admin ? "Remove admin" : "Make admin")}
-              ${btn("set-type", `Account type (${ROLES[a.account_type] ? ROLES[a.account_type].split(" ")[0] : "Student"})…`)}
-              ${btn("set-level", `Year level${a.year_level && LEARN_LEVELS[a.year_level] ? ` (${LEARN_LEVELS[a.year_level].short || LEARN_LEVELS[a.year_level].label})` : "…"}`)}
-              ${btn("toggle-multi", a.allow_multi_device ? "Multi-device: ON" : "Allow multiple devices")}
-              ${btn("toggle-teacher", a.is_teacher ? "Remove teacher" : a.account_type === "teacher" ? "✅ Verify teacher" : "Make teacher")}
-              ${btn("set-ai-bonus", `AI bonus${a.ai_bonus_pct ? ` (+${a.ai_bonus_pct}%)` : "…"}`)}
-              ${btn("reset", "Reset progress")}
-              ${isMe ? "" : btn("kick", a.has_paid ? "Kick" : "Unkick", "ghost")}
-              ${isMe ? "" : btn("delete", "Delete account", "ghost")}
+            <div class="manage-panel">
+              <div class="manage-group"><div class="manage-title">Plan &amp; time</div><div class="manage-btns">
+                ${btn("renew", "Add / take months…")}
+                ${btn("give", giving.has(a.id) ? "Close gifts" : "🎁 Give / take", "")}
+              </div></div>
+              <div class="manage-group"><div class="manage-title">Points &amp; XP</div><div class="manage-btns">
+                ${btn("add-points", "+10 pts")}${btn("set-points", "Set pts…")}
+                ${btn("add-xp", "+10 XP")}${btn("set-xp", "Set XP…")}
+              </div></div>
+              <div class="manage-group"><div class="manage-title">Account</div><div class="manage-btns">
+                ${btn("fix-login", "🔑 Fix login")}
+                ${btn("set-type", `Type: ${ROLES[a.account_type] ? ROLES[a.account_type].split(" ")[0] : "Student"}`)}
+                ${btn("set-level", `Year level${a.year_level && LEARN_LEVELS[a.year_level] ? `: ${LEARN_LEVELS[a.year_level].short || LEARN_LEVELS[a.year_level].label}` : "…"}`)}
+                ${btn("toggle-teacher", a.is_teacher ? "Remove teacher" : a.account_type === "teacher" ? "✅ Verify teacher" : "Make teacher")}
+                ${btn("toggle-admin", a.is_admin ? "Remove admin" : "Make admin")}
+              </div></div>
+              <div class="manage-group"><div class="manage-title">Access &amp; AI</div><div class="manage-btns">
+                ${btn("toggle-multi", a.allow_multi_device ? "Multi-device: ON" : "Allow multiple devices")}
+                ${btn("set-ai-bonus", `AI bonus${a.ai_bonus_pct ? ` (+${a.ai_bonus_pct}%)` : "…"}`)}
+              </div></div>
+              <div class="manage-group danger"><div class="manage-title">Danger zone</div><div class="manage-btns">
+                ${btn("reset", "Reset progress", "ghost")}
+                ${isMe ? "" : btn("kick", a.has_paid ? "Kick" : "Unkick", "ghost")}
+                ${isMe ? "" : btn("delete", "Delete account", "ghost")}
+              </div></div>
             </div>
             ${giving.has(a.id) ? `<div style="flex-basis:100%;">${giveFormHTML(a.id)}</div>` : ""}` : ""}
         </div>`;
@@ -3930,7 +3940,7 @@ function pageAdmin(view) {
     const { items, note } = readGiveForm(box), status = $(".give-status", box), go = $("[data-give-go]", box);
     if (!items.length) return toast("Tick at least one thing to give.");
     if (items.some((g) => ["points", "xp"].includes(g.kind) && !g.amount)) return toast("Enter an amount for points or XP.");
-    if (!targets.length) return toast("Tick at least one person in the list below.");
+    if (!targets.length) return toast("Tick at least one person in the Accounts list.");
     const who = targets.length === 1 ? targets[0].username || targets[0].email : `${targets.length} people`;
     const label = giveLabel(items);
     if (!confirm(`Give ${who}: ${label}?`)) return;
