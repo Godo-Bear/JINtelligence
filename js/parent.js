@@ -81,37 +81,68 @@ function linkedChildrenHTML(children) {
 const isParent = () => !!(typeof me !== "undefined" && me && me.accountType === "parent" && !me.isAdmin);
 const PARENT_PAGES = ["home", "practice", "progress", "settings"];
 
-function childGradesHTML(children) {
-  if (!children.length) {
-    return `<div class="card"><p class="muted" style="margin:0;">No children linked yet. Ask your child to open <b>Settings → Parent access</b> on their account to get a code, then enter it below.</p></div>`;
-  }
-  return children.map((c) => {
-    const t = totalsForProgress(c.progress);
-    const weak = weakTopicsForProgress(c.progress);
-    const rows = QUIZ_TOPICS.filter((tp) => statsForProgress(c.progress, tp.id).attempted > 0)
-      .sort((a, b) => masteryForProgress(c.progress, a.id) - masteryForProgress(c.progress, b.id));
-    return `<div class="card stack">
-      <div class="row between"><strong style="font-size:18px;">${esc(c.username || "(no name)")}</strong>
-        <span class="tag">${t.accuracy}% overall</span></div>
-      <div class="muted small">${t.attempted} questions answered · ${t.correct} correct${weak.length ? ` · needs help with: ${weak.map((w) => esc(w.name)).join(", ")}` : ""}</div>
-      ${rows.length ? rows.map((tp) => {
-        const s = statsForProgress(c.progress, tp.id), m = masteryForProgress(c.progress, tp.id);
-        return `<div><div class="row between small"><span>${tp.icon} ${esc(tp.name)}</span><span class="muted">${m}% · ${s.attempted} answered</span></div>
-          <div class="bar"><span style="width:${m}%"></span></div></div>`;
-      }).join("") : `<p class="muted small" style="margin:0;">They haven't answered any questions yet.</p>`}
-    </div>`;
-  }).join("");
-}
+// ---- The parent's pages (Home and Grades) ----
+const pcTone = (pct) => (pct >= 75 ? "good" : pct >= 50 ? "mid" : "low");
+const pcInitial = (name) => esc((String(name || "?").trim()[0] || "?").toUpperCase());
 
-function parentLinkFormHTML() {
-  return `<div class="card stack">
-    <div class="row" style="flex-wrap:nowrap;">
-      <input id="par-link-code" placeholder="Child's code" maxlength="12" autocomplete="off" style="text-transform:uppercase;">
-      <button class="btn" id="par-link-btn">Link</button>
+function childCardHTML(c) {
+  const t = totalsForProgress(c.progress);
+  const weak = weakTopicsForProgress(c.progress);
+  const rows = QUIZ_TOPICS.filter((tp) => statsForProgress(c.progress, tp.id).attempted > 0)
+    .map((tp) => ({ tp, s: statsForProgress(c.progress, tp.id), m: masteryForProgress(c.progress, tp.id) }))
+    .sort((a, b) => a.m - b.m);
+  const strong = rows.filter((r) => r.s.attempted >= 3 && r.m >= 70).sort((a, b) => b.m - a.m).slice(0, 3);
+  return `<div class="card pc-child">
+    <div class="pc-child-top">
+      <div class="pc-avatar" aria-hidden="true">${pcInitial(c.username)}</div>
+      <div class="grow">
+        <div class="pc-name">${esc(c.username || "(no name)")}</div>
+        <div class="muted small">${t.attempted ? `${t.attempted} question${t.attempted === 1 ? "" : "s"} answered · ${t.correct} correct` : "Hasn't answered any questions yet"}</div>
+      </div>
+      <div class="pc-ring ${pcTone(t.accuracy)}" style="--p:${t.accuracy}" role="img" aria-label="${t.accuracy}% accuracy"><span>${t.accuracy}%</span></div>
     </div>
-    <div id="par-link-status" class="small"></div>
+    ${t.attempted ? `
+    <div class="pc-pills">
+      ${strong.length ? `<div class="pc-pill good"><b>💪 Doing well</b><span>${strong.map((r) => esc(r.tp.name)).join(", ")}</span></div>` : ""}
+      ${weak.length ? `<div class="pc-pill low"><b>🎯 Could use help</b><span>${weak.map((w) => esc(w.name)).join(", ")}</span></div>` : ""}
+    </div>
+    <div class="pc-topics">
+      ${rows.map(({ tp, s, m }) => `<div class="pc-topic">
+        <div class="row between small"><span>${tp.icon} ${esc(tp.name)}</span><span class="muted">${m}% · ${s.attempted} answered</span></div>
+        <div class="pc-bar ${pcTone(m)}"><span style="width:${m}%"></span></div>
+      </div>`).join("")}
+    </div>` : `<p class="muted small" style="margin:12px 0 0;">Their grades will show up here as soon as they start doing practice questions.</p>`}
   </div>`;
 }
+
+function childGradesHTML(children) {
+  return children.length ? children.map(childCardHTML).join("") : "";
+}
+
+// Shown when no child is linked yet: clear steps, the code box, and a preview of what they'll get.
+function parentConnectHTML(first = true) {
+  return `<div class="card pc-connect">
+    <div class="pc-connect-head">
+      <div class="pc-connect-ico" aria-hidden="true">🔗</div>
+      <div>
+        <h2>${first ? "Connect to your child's account" : "Link another child"}</h2>
+        <p class="muted" style="margin:2px 0 0;">${first ? "It takes about a minute, and you only do it once." : "Enter their code to add them."}</p>
+      </div>
+    </div>
+    ${first ? `<ol class="pc-steps">
+      <li><b>1</b><div><strong>Your child logs in</strong><span>to their own JINtelligence student account.</span></div></li>
+      <li><b>2</b><div><strong>They open Settings → Parent access</strong><span>Every student already has a code there. It looks like <code>AB12CD</code>.</span></div></li>
+      <li><b>3</b><div><strong>You type that code below</strong><span>Then their grades appear on this page.</span></div></li>
+    </ol>` : ""}
+    <div class="pc-code-row">
+      <input id="par-link-code" placeholder="Enter code" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Your child's code">
+      <button class="btn" id="par-link-btn">Link</button>
+    </div>
+    <div id="par-link-status" class="small" role="status"></div>
+    ${first ? `<p class="muted small" style="margin:10px 0 0;">Your child doesn't have an account yet? They need to sign up as a <b>Student</b> first. Parent accounts are free, and you can't do the questions yourself.</p>` : ""}
+  </div>`;
+}
+const parentLinkFormHTML = () => parentConnectHTML(false);
 
 function wireParentLink(view, after) {
   $("#par-link-btn", view)?.addEventListener("click", async () => {
@@ -120,39 +151,95 @@ function wireParentLink(view, after) {
     const result = await linkToChild($("#par-link-code", view).value);
     btn.disabled = false;
     status.textContent = result.message;
-    status.className = result.ok ? "small" : "small error";
+    status.className = result.ok ? "small good" : "small error";
     if (result.ok) { $("#par-link-code", view).value = ""; after && after(); }
   });
+  $("#par-link-code", view)?.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#par-link-btn", view).click(); });
+}
+
+// A faded example so parents can see what they're about to get.
+function parentPreviewHTML() {
+  return `<div class="pc-preview" aria-hidden="true">
+    <span class="pc-example-tag">Example</span>
+    <div class="card pc-child">
+      <div class="pc-child-top">
+        <div class="pc-avatar">A</div>
+        <div class="grow"><div class="pc-name">Alex</div><div class="muted small">48 questions answered · 33 correct</div></div>
+        <div class="pc-ring mid" style="--p:69"><span>69%</span></div>
+      </div>
+      <div class="pc-pills">
+        <div class="pc-pill good"><b>💪 Doing well</b><span>Fractions and Percentages, Decimals</span></div>
+        <div class="pc-pill low"><b>🎯 Could use help</b><span>Geometry</span></div>
+      </div>
+      <div class="pc-topics">
+        <div class="pc-topic"><div class="row between small"><span>➗ Fractions and Percentages</span><span class="muted">86% · 14 answered</span></div><div class="pc-bar good"><span style="width:86%"></span></div></div>
+        <div class="pc-topic"><div class="row between small"><span>📐 Geometry</span><span class="muted">40% · 10 answered</span></div><div class="pc-bar low"><span style="width:40%"></span></div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function parentSubjectsHTML() {
+  const subjects = [
+    { icon: "➗", name: "Maths", n: MATHS_TOPICS.length, note: "Years 7 to 10 and VCE" },
+    { icon: "📖", name: "English", n: ENGLISH_TOPICS.length, note: "Reading, grammar, writing" },
+    { icon: "🔬", name: "Science", n: SCIENCE_TOPICS.length, note: "Forces, space, living things" },
+    { icon: "🏛️", name: "History", n: HISTORY_TOPICS.length, note: "Ancient to modern" },
+    { icon: "🌏", name: "Geography", n: GEOGRAPHY_TOPICS.length, note: "Places and environments" },
+  ];
+  return `<div class="pc-subjects">${subjects.map((s) => `
+    <a class="card pc-subject" href="#/practice"><span class="pc-subject-ico">${s.icon}</span>
+      <span><strong>${s.name}</strong><span class="muted small">${s.n} topics · ${s.note}</span></span></a>`).join("")}</div>`;
 }
 
 function drawChildGrades(view) {
   const el = $("#parent-kids", view);
   if (!el) return;
-  myChildren().then((children) => { if (view.contains(el)) el.innerHTML = childGradesHTML(children); });
+  myChildren().then((children) => {
+    if (!view.contains(el)) return;
+    const slot = $("#parent-connect", view);
+    if (children.length) {
+      el.innerHTML = childGradesHTML(children);
+      if (slot) slot.innerHTML = `<details class="pc-more"><summary>🔗 Link another child</summary>${parentConnectHTML(false)}</details>`;
+      const prev = $("#parent-preview", view); if (prev) prev.innerHTML = "";
+      const hero = $("#parent-hero-sub", view);
+      if (hero) hero.textContent = children.length === 1 ? `Here's how ${children[0].username || "your child"} is going.` : `Here's how your ${children.length} children are going.`;
+    } else {
+      el.innerHTML = "";
+      if (slot) slot.innerHTML = parentConnectHTML(true);
+      const prev = $("#parent-preview", view); if (prev) prev.innerHTML = `<div class="section-label">👀 What you'll see once you're connected</div>${parentPreviewHTML()}`;
+      const hero = $("#parent-hero-sub", view);
+      if (hero) hero.textContent = "Connect to your child's account to follow their progress.";
+    }
+    wireParentLink(view, () => drawChildGrades(view));
+  });
 }
 
 function pageParentHome(view) {
   view.innerHTML = `
-    <div class="page-head"><h1>Hi ${esc(me.name)} 👨‍👩‍👧</h1><p>Follow your child's progress and see what they can learn on JINtelligence.</p></div>
-    <div class="banner info">Parent accounts are <b>view-only</b>: you can see the topics and your child's grades. The questions, tests, AI tutor and games are for students, on their own accounts.</div>
-    <div class="section-label">📈 Your child's grades</div>
-    <div id="parent-kids" style="display:grid; gap:12px;"></div>
-    <div class="section-label">🔗 Link a child</div>
-    ${parentLinkFormHTML()}
-    <div class="section-label">📚 Topics</div>
-    <div class="card"><a href="#/practice">See every topic your child can learn →</a></div>`;
+    <div class="card parent-hero">
+      <div class="parent-hero-ico" aria-hidden="true">👨‍👩‍👧</div>
+      <div>
+        <h1>Hi ${esc(me.name)}</h1>
+        <p id="parent-hero-sub">Loading your family…</p>
+      </div>
+    </div>
+    <div class="pc-note">👀 Parent accounts are view-only: you can see your child's grades and the topics. Questions, tests, the AI tutor and games are for students.</div>
+    <div id="parent-kids" class="pc-kids"></div>
+    <div id="parent-connect"></div>
+    <div id="parent-preview"></div>
+    <div class="section-label">📚 What your child can learn</div>
+    ${parentSubjectsHTML()}`;
   drawChildGrades(view);
-  wireParentLink(view, () => drawChildGrades(view));
 }
 
 function pageParentProgress(view) {
   view.innerHTML = `
-    <div class="page-head"><h1>Your child's grades</h1><p>Accuracy by topic, and where they need more help.</p></div>
-    <div id="parent-kids" style="display:grid; gap:12px;"></div>
-    <div class="section-label">🔗 Link another child</div>
-    ${parentLinkFormHTML()}`;
+    <div class="page-head"><h1>Your child's grades</h1><p>Accuracy by topic, and where they could use some help.</p></div>
+    <div id="parent-kids" class="pc-kids"></div>
+    <div id="parent-connect"></div>
+    <div id="parent-preview"></div>`;
   drawChildGrades(view);
-  wireParentLink(view, () => drawChildGrades(view));
 }
 
 // The Practice page for a parent: the topic list only — the cards don't open and show no personal progress.
