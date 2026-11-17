@@ -454,7 +454,7 @@ $$("[data-auth-mode]").forEach((btn) => btn.addEventListener("click", () => {
   $("#auth-name-field").classList.toggle("hidden", !signup);
   $("#auth-terms-field").classList.toggle("hidden", !signup);
   $("#auth-age-field").classList.toggle("hidden", !signup);
-  $("#auth-plan-field").classList.toggle("hidden", !signup);
+  syncPlanField();
   $("#auth-role-field").classList.toggle("hidden", !signup);
   hide($("#auth-resend"));
   $("#auth-submit").textContent = signup ? "Create account" : "Log in";
@@ -462,12 +462,15 @@ $$("[data-auth-mode]").forEach((btn) => btn.addEventListener("click", () => {
   hide($("#auth-msg"));
 }));
 
+// Parent accounts are free (and view-only), so the plan picker is only for students and teachers.
+const chosenRole = () => $('input[name="auth-role"]:checked')?.value || "";
+function syncPlanField() { $("#auth-plan-field").classList.toggle("hidden", authMode !== "signup" || chosenRole() === "parent"); }
 const ROLE_HINTS = {
   student: "Practise, take tests and use the AI tutor.",
-  parent: "Follow your child's progress with a code from their account.",
+  parent: "Free! View-only: see the topics and your child's grades, using a code from their account. No practice, tests or AI.",
   teacher: "Run classes and set work. The site owner verifies teachers before the Teacher page unlocks.",
 };
-$$('input[name="auth-role"]').forEach((r) => r.addEventListener("change", () => { $("#auth-role-hint").textContent = ROLE_HINTS[r.value]; }));
+$$('input[name="auth-role"]').forEach((r) => r.addEventListener("change", () => { $("#auth-role-hint").textContent = ROLE_HINTS[r.value]; syncPlanField(); }));
 $$('input[name="auth-age"]').forEach((r) => r.addEventListener("change", () => {
   $("#auth-parent-field").classList.toggle("hidden", !$("#auth-age-under").checked);
 }));
@@ -496,7 +499,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
   if (authMode === "signup") {
     if (name.length < 3) return setMsg(msg, "Display name needs at least 3 characters.", "error");
     if (!$('input[name="auth-role"]:checked')) return setMsg(msg, "Please choose whether you are a student, parent or teacher.", "error");
-    if (!$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $7 for 1 month or $15 for 4 months.", "error");
+    if (chosenRole() !== "parent" && !$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $7 for 1 month or $15 for 4 months.", "error");
     if (!$("#auth-terms").checked) return setMsg(msg, "Please agree to the Terms & Conditions.", "error");
     if ($("#auth-age-under").checked && !$("#auth-parent-consent").checked) {
       return setMsg(msg, "A parent or guardian needs to agree on your behalf — please tick the box.", "error");
@@ -509,10 +512,11 @@ $("#auth-form").addEventListener("submit", async (e) => {
       const { data, error } = await sb.auth.signUp({ email, password });
       if (error) throw error;
       store(`apex-terms-seen-${email}`, TERMS_VERSION);
-      store(planKey(email), +$('input[name="auth-plan"]:checked').value);
+      const planPick = $('input[name="auth-plan"]:checked');
+      if (planPick && chosenRole() !== "parent") store(planKey(email), +planPick.value);
       store(roleKey(email), $('input[name="auth-role"]:checked').value);
       if (data.session && data.user) {
-        const planMonths = +$('input[name="auth-plan"]:checked').value;
+        const planMonths = planPick && chosenRole() !== "parent" ? +planPick.value : 4;
         const role = $('input[name="auth-role"]:checked').value;
         const base = { id: data.user.id, email, username: name, has_paid: false, agreed_to_terms: true };
         let ins = await sb.from("profiles").insert({ ...base, plan_months: planMonths, account_type: role });
@@ -631,7 +635,7 @@ async function selectDroppingMissing(run, required, optional) {
 }
 let claimNewSession = false; // set when the person has just typed their password (a fresh login on this device)
 
-async function handleAuthenticatedUser(user) {
+async function handleAuthenticatedUser(user, retried = false) {
   authUser = { id: user.id, email: user.email };
   const fresh = claimNewSession; claimNewSession = false;
   let { data: profile, error } = await selectDroppingMissing(
@@ -646,12 +650,14 @@ async function handleAuthenticatedUser(user) {
     let ins = await sb.from("profiles").insert({ ...row, plan_months: chosen, account_type: role });
     if (ins.error) ins = await sb.from("profiles").insert({ ...row, plan_months: chosen });
     if (ins.error) await sb.from("profiles").insert(row);
+    if (role === "parent" && !retried) return handleAuthenticatedUser(user, true); // parent accounts are free
     return showPaywall(chosen);
   }
   if (error) { console.error("Apex: profile fetch failed —", error); return showPaywall(); }
 
   const active = profile.has_paid && (!profile.paid_until || new Date(profile.paid_until) > new Date());
-  if (!active) return showPaywall(profile.plan_months || store(planKey(user.email)) || 4);
+  const freeParent = profile.account_type === "parent" && !profile.is_admin; // parent accounts are free, and view-only
+  if (!active && !freeParent) return showPaywall(profile.plan_months || store(planKey(user.email)) || 4);
 
   const claim = await claimDevice(profile, fresh);
   if (!claim.ok) { await logout(); showDeviceKickedMessage(); return; }
@@ -761,7 +767,7 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-17a";
+const TERMS_VERSION = "2026-11-17b";
 const TERMS_CHANGES = [
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
@@ -769,6 +775,7 @@ const TERMS_CHANGES = [
   "New — AI memory: your AI tutor chats are saved to your account, and the AI can remember short notes about you (like topics you find tricky) to help you next time. You can see, delete or turn this off in Settings.",
   "New — public tests: you can share tests with everyone on JINtelligence. Shared tests show your name (unless you turn it off), must follow the behaviour rules, and can be removed by the site owner.",
   "New — plans: choose $7 for 1 month or $15 for 4 months when you sign up, paid cash in hand to the site owner. Your plan shows in Settings.",
+  "New — parent accounts: free to make, but view-only. A parent account can see the topics and a linked child's grades. It can't do practice questions, tests, games or use the AI tutor — those are for student accounts, and a parent account must not be given to a student to use.",
   "New — one device: your account can be logged in on one device at a time. Logging in on a new device logs you out of the old one, unless the site owner allows your account to use several devices.",
   "Accounts are unlocked by hand, so it may take a while after paying. No refunds.",
   "Using the AI: it's for learning. Don't hand in AI-written work as your own.",
