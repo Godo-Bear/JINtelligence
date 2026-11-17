@@ -187,7 +187,7 @@ function calEventHTML(e, { showDate = false, foot = true } = {}) {
       <button type="button" class="btn secondary sm" data-act="plan">🗓️ Study plan</button>
     </div>` : ""}
     ${foot || topic ? `<div class="cal-event-foot">
-      ${topic ? `<a class="btn ghost sm" href="#/practice/${topic.id}">${topic.icon} Practise ${esc(topic.name)}</a>` : ""}
+      ${topic ? `<a class="btn ghost sm" href="#/practice/${topic.id}">${topic.icon} Practice ${esc(topic.name)}</a>` : ""}
       ${foot ? `<button type="button" class="btn ghost sm" data-act="edit">✏️ Edit</button>
       <button type="button" class="btn ghost sm" data-act="done">${e.done ? "↩︎ Not done" : "✓ Mark done"}</button>` : ""}
     </div>` : ""}

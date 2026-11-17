@@ -22,7 +22,7 @@ function storeReview(state) {
   if (typeof syncSavedTests === "function") syncSavedTests(); // same cloud row as decks/tests — one combined sync
 }
 
-// When a topic was last practised (any correct/incorrect answer), so Home can suggest stale ones.
+// When a topic was last done (any correct/incorrect answer), so Home can suggest stale ones.
 const topicLastKey = () => `apex-topic-last-${authUser.id}`;
 const loadTopicLast = () => store(topicLastKey()) || {};
 function bumpTopicLast(topicId) {
@@ -144,14 +144,14 @@ function renderTodayReview(el) {
   if (!queue.length) {
     el.innerHTML = `<div class="card review-card">
       <div class="row" style="gap:14px;"><span class="emoji">📅</span>
-        <div><h3 style="margin:0;">Today's review</h3><div class="muted small">Nothing to review yet — flag a question (☆ on any question) or get one wrong, and it'll turn up here to practise again.</div></div>
+        <div><h3 style="margin:0;">Today's review</h3><div class="muted small">Nothing to review yet — flag a question (☆ on any question) or get one wrong, and it'll turn up here for more practice.</div></div>
       </div></div>`;
     return;
   }
   el.innerHTML = `<div class="card review-card">
     <div class="row between" style="gap:14px;">
       <div class="row" style="gap:14px;"><span class="emoji">📅</span>
-        <div><h3 style="margin:0;">Today's review</h3><div class="muted small">${due ? `${due} question${due === 1 ? "" : "s"} due` : "A few topics you haven't practised in a while"}${queue.length > due ? ` · ${queue.length} question${queue.length === 1 ? "" : "s"} total` : ""}</div></div>
+        <div><h3 style="margin:0;">Today's review</h3><div class="muted small">${due ? `${due} question${due === 1 ? "" : "s"} due` : "A few topics you haven't done in a while"}${queue.length > due ? ` · ${queue.length} question${queue.length === 1 ? "" : "s"} total` : ""}</div></div>
       </div>
       <button class="btn" type="button" id="start-review">Start →</button>
     </div></div>`;

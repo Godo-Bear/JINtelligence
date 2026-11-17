@@ -6,7 +6,7 @@
    · Survival clock: start with 30 seconds; right answers add time, wrong ones take it away.
    · Boss battle: right answers hit the boss, wrong answers hit you.
    · Millionaire ladder: 15 questions to a million, with 50:50 and Ask the AI.
-   Extras: combo bonuses, badges, pause, practise your mistakes, and friend challenge links.
+   Extras: combo bonuses, badges, pause, fix-your-mistakes rounds, and friend challenge links.
    Uses the same questions, marking and points as Practice.
 ========================================================= */
 
@@ -24,7 +24,7 @@ const GAME_MODES = [
   { id: "boss", name: "Boss battle", icon: "👾", desc: "Right answers hit the boss. Wrong answers hit you. Who falls first?" },
   { id: "millionaire", name: "Millionaire ladder", icon: "💰", desc: "15 questions to a million coins, with 50:50 and Ask the AI lifelines." },
 ];
-const MODE_NAMES = { ...Object.fromEntries(GAME_MODES.map((m) => [m.id, m.name])), mistakes: "Practise your mistakes", challenge: "Friend challenge" };
+const MODE_NAMES = { ...Object.fromEntries(GAME_MODES.map((m) => [m.id, m.name])), mistakes: "Fix your mistakes", challenge: "Friend challenge" };
 const MODE_ICONS = { ...Object.fromEntries(GAME_MODES.map((m) => [m.id, m.icon])), mistakes: "📚", challenge: "🤝" };
 const GAME_COUNTS = [5, 10, 15, 20, 30, 50];
 // "q" = seconds for each question, "t" = seconds for the whole game.
@@ -56,7 +56,7 @@ const GAME_BADGES = [
   { id: "million", icon: "💰", name: "Millionaire", desc: "Win the million in Millionaire ladder." },
   { id: "allrounder", icon: "🌐", name: "All-rounder", desc: "Get 10 right in one General game." },
   { id: "challenger", icon: "🤝", name: "Challenger", desc: "Beat a friend's challenge." },
-  { id: "learner", icon: "📚", name: "Learner", desc: "Finish a Practise your mistakes round." },
+  { id: "learner", icon: "📚", name: "Learner", desc: "Finish a Fix your mistakes round." },
 ];
 
 const gameKey = (name) => `apex-game-${name}-${authUser.id}`;
@@ -617,7 +617,7 @@ function playGame(view, s, extra = {}) {
       </div>
       <div class="row" style="margin-bottom:16px;">
         <button class="btn" type="button" id="g-again">↻ Play again</button>
-        ${wrongItems.length ? `<button class="btn secondary" type="button" id="g-mistakes">📚 Practise my mistakes (${wrongItems.length})</button>` : ""}
+        ${wrongItems.length ? `<button class="btn secondary" type="button" id="g-mistakes">📚 Fix my mistakes (${wrongItems.length})</button>` : ""}
         ${canChallenge && answered ? `<button class="btn secondary" type="button" id="g-challenge">🤝 Challenge a friend</button>` : ""}
         <a class="btn ghost" href="#/games" id="g-change">Change game</a>
       </div>

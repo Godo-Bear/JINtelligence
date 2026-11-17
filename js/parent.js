@@ -140,7 +140,7 @@ function pageParentHome(view) {
     <div class="section-label">🔗 Link a child</div>
     ${parentLinkFormHTML()}
     <div class="section-label">📚 Topics</div>
-    <div class="card"><a href="#/practice">See every topic your child can practise →</a></div>`;
+    <div class="card"><a href="#/practice">See every topic your child can learn →</a></div>`;
   drawChildGrades(view);
   wireParentLink(view, () => drawChildGrades(view));
 }
@@ -157,7 +157,7 @@ function pageParentProgress(view) {
 
 // The Practice page for a parent: the topic list only — the cards don't open and show no personal progress.
 function lockTopicsForParent(view) {
-  $(".page-head p", view) && ($(".page-head p", view).textContent = "Here's everything your child can practise. Only students can answer the questions.");
+  $(".page-head p", view) && ($(".page-head p", view).textContent = "Here's everything your child can learn. Only students can answer the questions.");
   view.querySelectorAll("a.topic-card").forEach((a) => {
     const d = document.createElement("div");
     d.className = a.className + " locked";

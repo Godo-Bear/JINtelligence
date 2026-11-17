@@ -470,7 +470,7 @@ function syncPlanField() {
   $("#auth-level-field").classList.toggle("hidden", authMode !== "signup" || chosenRole() !== "student"); // students pick their year level once, at sign-up
 }
 const ROLE_HINTS = {
-  student: "Practise, take tests and use the AI tutor.",
+  student: "Do practice questions, take tests and use the AI tutor.",
   parent: "Free! View-only: see the topics and your child's grades, using a code from their account. No practice, tests or AI.",
   teacher: "Run classes and set work. The site owner verifies teachers before the Teacher page unlocks.",
 };
@@ -764,7 +764,7 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-17c";
+const TERMS_VERSION = "2026-11-17d";
 const TERMS_CHANGES = [
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
@@ -772,6 +772,7 @@ const TERMS_CHANGES = [
   "New — AI memory: your AI tutor chats are saved to your account, and the AI can remember short notes about you (like topics you find tricky) to help you next time. You can see, delete or turn this off in Settings.",
   "New — public tests: you can share tests with everyone on JINtelligence. Shared tests show your name (unless you turn it off), must follow the behaviour rules, and can be removed by the site owner.",
   "New — plans: choose $7 for 1 month or $15 for 4 months when you sign up, paid cash in hand to the site owner. Your plan shows in Settings.",
+  "Small wording and spelling tidy-ups (nothing about what the Terms mean has changed).",
   "New — year level: students choose their year level when they sign up. After that it's locked, so the AI, tests and questions stay at that level; only the site owner can change it if it was a mistake.",
   "New — parent accounts: free to make, but view-only. A parent account can see the topics and a linked child's grades. It can't do practice questions, tests, games or use the AI tutor — those are for student accounts, and a parent account must not be given to a student to use.",
   "New — one device: your account can be logged in on one device at a time. Logging in on a new device logs you out of the old one, unless the site owner allows your account to use several devices.",
@@ -1056,7 +1057,7 @@ function pageHome(view) {
         <span class="emoji">${topic.icon}</span>
         <div><h3 style="margin:0;">${esc(topic.name)}</h3><div class="muted small">${esc(reason)}</div></div>
       </div>
-      <a class="btn" href="#/practice/${topic.id}">Practise →</a>
+      <a class="btn" href="#/practice/${topic.id}">Practice →</a>
     </div>
 
     <div class="section-label row between" style="margin-bottom:10px;">
@@ -1193,7 +1194,7 @@ function pageTopic(view, t) {
             <p style="margin:14px 0 6px;"><span class="tag">${DIFF_NAMES[d]}</span> ${esc(t.workedExample[d].question)}</p>
             <div class="explain" style="margin-top:0;">${esc(t.workedExample[d].walkthrough)}</div>`).join("")}
         </div>` : ""}
-      <button class="btn block" type="button" id="go-practice">Start practising →</button>
+      <button class="btn block" type="button" id="go-practice">Start practice →</button>
     </div>
 
     <div class="card" id="tab-practice">
@@ -3262,7 +3263,7 @@ function weakTopics(limit = 5) {
 }
 function weakSpotsHTML() {
   const weak = weakTopics();
-  if (!weak.length) return `<p class="muted small" style="margin:0;">Practise a topic a few times and your weakest spots will show up here.</p>`;
+  if (!weak.length) return `<p class="muted small" style="margin:0;">Do a few practice sets on a topic and your weakest spots will show up here.</p>`;
   const diffDots = (tp) => {
     const bd = topicStats(tp.id).byDiff || {};
     return [1, 2, 3].map((d) => {
@@ -3284,7 +3285,7 @@ function wireWeakSpots(view) {
   $("#weak-mix", view)?.addEventListener("click", () => {
     const topics = weakTopics(3);
     const pool = topics.flatMap((tp) => tp.questions.map((q) => ({ q, topic: tp })));
-    if (!pool.length) return toast("No questions to practise in these topics yet.");
+    if (!pool.length) return toast("No practice questions in these topics yet.");
     runTest(view, shuffle(pool).slice(0, 10), 0, { again: "Back to Progress", againHref: "#/progress" });
   });
 }
@@ -4040,7 +4041,7 @@ function pageAdmin(view) {
     if (btn.dataset.act === "give") { giving.has(a.id) ? giving.delete(a.id) : giving.add(a.id); return drawAccounts(); }
     if (btn.dataset.act === "fix-login") return openFixLogin(a, drawAccounts);
     const name = a.username || a.email;
-    // Your own row may be stale if you've practised since this page loaded.
+    // Your own row may be stale if you've done practice since this page loaded.
     if (a.id === authUser.id) { a.points = me.points; a.xp = me.xp; }
     let update = null;
 

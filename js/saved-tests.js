@@ -255,7 +255,7 @@ function flaggedPrompt(mode = "tutor") {
     return `F${n + 1}. [${q.topicName || "General"} · ${from}] ${String(q.prompt).slice(0, 300)}${opts}${vis} — Correct answer: ${String(ans).slice(0, 150)}${q.explanation ? `. Explanation: ${String(q.explanation).slice(0, 200)}` : ""}`;
   };
   if (mode === "test") return `
-FLAGGED QUESTIONS: The student has flagged these test and practice questions to work on (F1 is the most recent). If they ask for a test on their flagged, starred or wrong questions (or on "F2", "the fraction ones" and so on), build it from this list: write NEW questions that practise the same skills at the same level, and you may also include an original question exactly as it is if they ask for that. Otherwise, only use the list if it's relevant to what they ask for.
+FLAGGED QUESTIONS: The student has flagged these test and practice questions to work on (F1 is the most recent). If they ask for a test on their flagged, starred or wrong questions (or on "F2", "the fraction ones" and so on), build it from this list: write NEW questions that cover the same skills at the same level, and you may also include an original question exactly as it is if they ask for that. Otherwise, only use the list if it's relevant to what they ask for.
 ${list.map(line).join("\n")}
 `;
   return `

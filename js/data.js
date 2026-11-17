@@ -615,7 +615,7 @@ function yearMultiplier(yearId) {
 const ENGLISH_TOPICS = [
   { id: "eng-creative", name: "Creative Writing", icon: "✍️",
     blurb: "Pick a prompt and write freely against a timer.",
-    recap: "Practising imaginative writing — building a story or description from a starting idea, without a right or wrong answer.",
+    recap: "Practice in imaginative writing — building a story or description from a starting idea, without a right or wrong answer.",
     example: "Writing a short story inspired by a photo, a 'what if' question, or a strange scenario.",
     special: "creative-writing",
     diagram: `<svg viewBox="0 0 300 160" xmlns="http://www.w3.org/2000/svg">
@@ -645,7 +645,7 @@ const ENGLISH_TOPICS = [
     ] },
   { id: "eng-essay", name: "Essay Writing", icon: "📝",
     blurb: "Pick a prompt and write a structured essay against a timer.",
-    recap: "Practising persuasive and discursive essay writing — building a clear argument with an introduction, body paragraphs, and a conclusion.",
+    recap: "Practice in persuasive and discursive essay writing — building a clear argument with an introduction, body paragraphs, and a conclusion.",
     example: "Writing a persuasive essay arguing whether mobile phones should be allowed in school.",
     special: "essay-writing",
     diagram: `<svg viewBox="0 0 300 160" xmlns="http://www.w3.org/2000/svg">
