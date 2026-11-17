@@ -218,8 +218,8 @@ async function aiErrorInfo(err) {
 const AI_TRIES = 3;
 
 // ---------------- Plans (chosen at signup, paid cash in hand) ----------------
-// Plans: $5 for 1 month, $15 for 4 months. (Accounts made before the 4-month plan, stored as 6, count as the long plan.)
-const PLANS = { 1: { months: 1, price: 5, label: "1 month" }, 4: { months: 4, price: 15, label: "4 months" } };
+// Plans: $7 for 1 month, $15 for 4 months. (Accounts made before the 4-month plan, stored as 6, count as the long plan.)
+const PLANS = { 1: { months: 1, price: 7, label: "1 month" }, 4: { months: 4, price: 15, label: "4 months" } };
 const planInfo = (months) => PLANS[months] || PLANS[4];
 const planText = (months) => { const p = planInfo(months); return `$${p.price} for ${p.label}`; };
 const ROLES = { student: "Student", parent: "Parent / guardian", teacher: "Teacher" };
@@ -496,7 +496,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
   if (authMode === "signup") {
     if (name.length < 3) return setMsg(msg, "Display name needs at least 3 characters.", "error");
     if (!$('input[name="auth-role"]:checked')) return setMsg(msg, "Please choose whether you are a student, parent or teacher.", "error");
-    if (!$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $5 for 1 month or $15 for 4 months.", "error");
+    if (!$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $7 for 1 month or $15 for 4 months.", "error");
     if (!$("#auth-terms").checked) return setMsg(msg, "Please agree to the Terms & Conditions.", "error");
     if ($("#auth-age-under").checked && !$("#auth-parent-consent").checked) {
       return setMsg(msg, "A parent or guardian needs to agree on your behalf — please tick the box.", "error");
@@ -758,14 +758,14 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-16c";
+const TERMS_VERSION = "2026-11-17a";
 const TERMS_CHANGES = [
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
   "New — calendar: put your tests, assignments and reminders on the calendar (Notes & calendar). It's saved to your account, and the AI can see what's coming up so it can help you prepare (you can turn this off).",
   "New — AI memory: your AI tutor chats are saved to your account, and the AI can remember short notes about you (like topics you find tricky) to help you next time. You can see, delete or turn this off in Settings.",
   "New — public tests: you can share tests with everyone on JINtelligence. Shared tests show your name (unless you turn it off), must follow the behaviour rules, and can be removed by the site owner.",
-  "New — plans: choose $5 for 1 month or $15 for 4 months when you sign up, paid cash in hand to the site owner. Your plan shows in Settings.",
+  "New — plans: choose $7 for 1 month or $15 for 4 months when you sign up, paid cash in hand to the site owner. Your plan shows in Settings.",
   "New — one device: your account can be logged in on one device at a time. Logging in on a new device logs you out of the old one, unless the site owner allows your account to use several devices.",
   "Accounts are unlocked by hand, so it may take a while after paying. No refunds.",
   "Using the AI: it's for learning. Don't hand in AI-written work as your own.",

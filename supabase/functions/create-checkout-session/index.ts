@@ -15,7 +15,7 @@ const json = (body: unknown, status = 200) =>
 
 // Plans, in cents AUD — keep in step with the prices shown on the sign-up screen and in the Terms.
 const PLANS: Record<number, { cents: number; label: string }> = {
-  1: { cents: 500, label: '1 month' },
+  1: { cents: 700, label: '1 month' },
   4: { cents: 1500, label: '4 months' },
 };
 const CURRENCY = 'aud';
