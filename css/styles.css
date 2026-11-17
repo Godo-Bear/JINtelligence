@@ -1493,3 +1493,10 @@ html.admin-only main { max-width: 1100px; margin: 0 auto; width: 100%; padding-b
 .pc-subject-ico { font-size: 26px; width: 46px; height: 46px; border-radius: 12px; background: var(--accent-soft); display: grid; place-items: center; flex: none; }
 .pc-subject:hover { border-color: var(--accent); }
 @media (max-width: 520px) { .parent-hero { padding: 16px; } .parent-hero h1 { font-size: 22px; } .pc-code-row input { font-size: 18px; } }
+
+.pc-sec-title { font-size: 11.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); margin: 16px 0 8px; }
+.pc-subj-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.pc-subj { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 4px; background: var(--surface); }
+.pc-subj-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.pc-subj-name { font-weight: 600; } .pc-subj b { font-size: 17px; }
+.pc-subj.good b { color: var(--good); } .pc-subj.mid b { color: var(--warm); } .pc-subj.low b { color: var(--bad); } .pc-subj.none b { color: var(--muted); }

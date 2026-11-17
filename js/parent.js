@@ -85,6 +85,28 @@ const PARENT_PAGES = ["home", "practice", "progress", "settings"];
 const pcTone = (pct) => (pct >= 75 ? "good" : pct >= 50 ? "mid" : "low");
 const pcInitial = (name) => esc((String(name || "?").trim()[0] || "?").toUpperCase());
 
+// Progress for each subject: accuracy, how many topics they've started, and how many questions they've answered.
+const PC_SUBJECTS = [
+  { id: "maths", icon: "➗", name: "Maths" }, { id: "english", icon: "📖", name: "English" }, { id: "science", icon: "🔬", name: "Science" },
+  { id: "history", icon: "🏛️", name: "History" }, { id: "geography", icon: "🌏", name: "Geography" },
+];
+function subjectProgress(progress) {
+  return PC_SUBJECTS.map((s) => {
+    const topics = QUIZ_TOPICS.filter((t) => t.subject === s.id);
+    let correct = 0, attempted = 0, started = 0;
+    topics.forEach((t) => { const st = statsForProgress(progress, t.id); correct += st.correct || 0; attempted += st.attempted || 0; if (st.attempted > 0) started += 1; });
+    return { ...s, total: topics.length, started, attempted, correct, accuracy: attempted ? Math.round((correct / attempted) * 100) : 0 };
+  }).filter((s) => s.total > 0);
+}
+function subjectTilesHTML(list) {
+  return `<div class="pc-subj-grid">${list.map((s) => `
+    <div class="pc-subj ${s.attempted ? pcTone(s.accuracy) : "none"}">
+      <div class="pc-subj-top"><span class="pc-subj-name">${s.icon} ${esc(s.name)}</span><b>${s.attempted ? `${s.accuracy}%` : "–"}</b></div>
+      <div class="pc-bar ${s.attempted ? pcTone(s.accuracy) : ""}"><span style="width:${s.attempted ? s.accuracy : 0}%"></span></div>
+      <div class="muted small">${s.attempted ? `${s.started} of ${s.total} topic${s.total === 1 ? "" : "s"} started · ${s.attempted} answered` : "Not started yet"}</div>
+    </div>`).join("")}</div>`;
+}
+
 function childCardHTML(c) {
   const t = totalsForProgress(c.progress);
   const weak = weakTopicsForProgress(c.progress);
@@ -102,10 +124,13 @@ function childCardHTML(c) {
       <div class="pc-ring ${pcTone(t.accuracy)}" style="--p:${t.accuracy}" role="img" aria-label="${t.accuracy}% accuracy"><span>${t.accuracy}%</span></div>
     </div>
     ${t.attempted ? `
+    <div class="pc-sec-title">Progress by subject</div>
+    ${subjectTilesHTML(subjectProgress(c.progress))}
     <div class="pc-pills">
       ${strong.length ? `<div class="pc-pill good"><b>💪 Doing well</b><span>${strong.map((r) => esc(r.tp.name)).join(", ")}</span></div>` : ""}
       ${weak.length ? `<div class="pc-pill low"><b>🎯 Could use help</b><span>${weak.map((w) => esc(w.name)).join(", ")}</span></div>` : ""}
     </div>
+    <div class="pc-sec-title">Every topic they've tried</div>
     <div class="pc-topics">
       ${rows.map(({ tp, s, m }) => `<div class="pc-topic">
         <div class="row between small"><span>${tp.icon} ${esc(tp.name)}</span><span class="muted">${m}% · ${s.attempted} answered</span></div>
@@ -167,6 +192,12 @@ function parentPreviewHTML() {
         <div class="grow"><div class="pc-name">Alex</div><div class="muted small">48 questions answered · 33 correct</div></div>
         <div class="pc-ring mid" style="--p:69"><span>69%</span></div>
       </div>
+      <div class="pc-sec-title">Progress by subject</div>
+      ${subjectTilesHTML([
+        { icon: "➗", name: "Maths", total: 24, started: 5, attempted: 38, accuracy: 74 },
+        { icon: "📖", name: "English", total: 12, started: 2, attempted: 10, accuracy: 60 },
+        { icon: "🔬", name: "Science", total: 13, started: 0, attempted: 0, accuracy: 0 },
+      ])}
       <div class="pc-pills">
         <div class="pc-pill good"><b>💪 Doing well</b><span>Fractions and Percentages, Decimals</span></div>
         <div class="pc-pill low"><b>🎯 Could use help</b><span>Geometry</span></div>
