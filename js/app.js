@@ -218,36 +218,53 @@ async function aiErrorInfo(err) {
 const AI_TRIES = 3;
 
 // ---------------- Plans (chosen at signup, paid cash in hand) ----------------
-// Plans & prices. These are the built-in defaults; an admin can change them any time (Admin → Plans & prices),
-// and the changes are kept in the "plans" table (see supabase/plans-table.sql). Accounts made on an old plan that no
-// longer exists count as the nearest plan.
-const DEFAULT_PLANS = [{ months: 1, price: 7 }, { months: 4, price: 15 }];
-let PLAN_LIST = DEFAULT_PLANS.map((p) => ({ ...p }));
+// Plans & prices. An admin makes the plans (Admin → Plans & prices): each has a title, a description, how many months it
+// lasts, a price, an optional badge ("Best value") and an on/off switch. They live in the "plan_offers" table
+// (see supabase/plan-offers.sql). Until that table has plans, these built-in ones are used.
+const DEFAULT_PLANS = [
+  { id: "1", title: "1 month", description: "", months: 1, price: 7, badge: "", active: true, sort: 0 },
+  { id: "4", title: "4 months", description: "", months: 4, price: 15, badge: "", active: true, sort: 1 },
+];
+let ALL_PLANS = DEFAULT_PLANS.map((p) => ({ ...p })); // every plan, so accounts on a switched-off plan still resolve
+let PLAN_LIST = ALL_PLANS.slice();                      // the plans people can choose right now
+let PLANS_FROM_DB = false;
 const monthsLabel = (m) => `${m} month${m === 1 ? "" : "s"}`;
 const money = (n) => `$${Number(n) % 1 ? Number(n).toFixed(2) : Number(n)}`;
 function setPlans(rows) {
-  const seen = new Map();
-  (rows || []).forEach((r) => {
-    const months = parseInt(r.months, 10), price = Number(r.price);
-    if (months >= 1 && months <= 120 && isFinite(price) && price >= 0) seen.set(months, { months, price });
-  });
-  PLAN_LIST = seen.size ? [...seen.values()].sort((x, y) => x.months - y.months) : DEFAULT_PLANS.map((p) => ({ ...p }));
+  const list = (rows || []).map((r) => ({
+    id: String(r.id ?? ""), title: String(r.title || "").trim(), description: String(r.description || "").trim(),
+    months: parseInt(r.months, 10), price: Number(r.price), badge: String(r.badge || "").trim(),
+    active: r.active !== false, sort: Number(r.sort_order) || 0,
+  })).filter((p) => p.id && p.months >= 1 && p.months <= 120 && isFinite(p.price) && p.price >= 0)
+    .map((p) => ({ ...p, title: p.title || monthsLabel(p.months) }))
+    .sort((x, y) => x.sort - y.sort || x.months - y.months);
+  PLANS_FROM_DB = list.length > 0;
+  ALL_PLANS = list.length ? list : DEFAULT_PLANS.map((p) => ({ ...p }));
+  PLAN_LIST = ALL_PLANS.filter((p) => p.active);
+  if (!PLAN_LIST.length) PLAN_LIST = ALL_PLANS.slice();
 }
-const planInfo = (months) => {
+// Finds an account's plan from the months (and title, if known). A plan that no longer exists counts as the nearest one.
+function findPlan(months, name) {
   const m = Number(months) || 4;
-  const p = PLAN_LIST.find((x) => x.months === m) || [...PLAN_LIST].sort((x, y) => Math.abs(x.months - m) - Math.abs(y.months - m))[0];
-  return { months: p.months, price: p.price, label: monthsLabel(p.months) };
+  return (name && ALL_PLANS.find((p) => p.title === name && p.months === m)) || ALL_PLANS.find((p) => p.months === m)
+    || [...ALL_PLANS].sort((x, y) => Math.abs(x.months - m) - Math.abs(y.months - m))[0];
+}
+const planInfo = (months, name) => {
+  const p = findPlan(months, name);
+  return { id: p.id, title: p.title, months: p.months, price: p.price, label: monthsLabel(p.months), description: p.description, badge: p.badge };
 };
-const planText = (months) => { const p = planInfo(months); return `${money(p.price)} for ${p.label}`; };
+const planText = (months, name) => { const p = planInfo(months, name); return `${money(p.price)} for ${p.label}`; };
+// "Starter — $7 for 1 month" (the title is left out when it just says the length)
+const planLine = (months, name) => { const p = planInfo(months, name); return `${p.title !== p.label ? `${p.title} — ` : ""}${planText(months, name)}`; };
 // "$7 for 1 month or $15 for 4 months" (with more plans: "A, B or C")
 function planListText(aud = false) {
-  const parts = PLAN_LIST.map((p) => `${money(p.price)}${aud ? " AUD" : ""} for ${monthsLabel(p.months)}`);
+  const parts = PLAN_LIST.map((p) => `${p.title !== monthsLabel(p.months) ? `${p.title}: ` : ""}${money(p.price)}${aud ? " AUD" : ""} for ${monthsLabel(p.months)}`);
   return parts.length < 2 ? parts.join("") : `${parts.slice(0, -1).join(", ")} or ${parts[parts.length - 1]}`;
 }
 // How much a longer plan saves compared with paying for the shortest plan again and again.
 function planSaving(p) {
-  const base = PLAN_LIST[0];
-  if (!base || p.months === base.months) return 0;
+  const base = [...PLAN_LIST].sort((x, y) => x.months - y.months)[0];
+  if (!base || p.months <= base.months) return 0;
   return Math.round((base.price / base.months) * p.months - p.price);
 }
 function renderPlanPicker() {
@@ -257,7 +274,8 @@ function renderPlanPicker() {
   box.style.gridTemplateColumns = `repeat(${Math.min(PLAN_LIST.length, 3)}, 1fr)`;
   box.innerHTML = PLAN_LIST.map((p) => {
     const save = planSaving(p);
-    return `<label class="choice plan"><input type="radio" name="auth-plan" value="${p.months}"${String(p.months) === checked ? " checked" : ""}><span><b>${money(p.price)}</b><small>${monthsLabel(p.months)}${save > 0 ? ` · save ${money(save)}` : ""}</small></span></label>`;
+    const custom = p.title !== monthsLabel(p.months);
+    return `<label class="choice plan${p.badge ? " has-badge" : ""}"><input type="radio" name="auth-plan" value="${esc(p.id)}"${p.id === checked ? " checked" : ""}><span>${p.badge ? `<em class="plan-badge">${esc(p.badge)}</em>` : ""}${custom ? `<strong class="plan-title">${esc(p.title)}</strong>` : ""}<b>${money(p.price)}</b><small>${monthsLabel(p.months)}${save > 0 ? ` · save ${money(save)}` : ""}</small>${p.description ? `<small class="plan-desc">${esc(p.description)}</small>` : ""}</span></label>`;
   }).join("");
 }
 // Every place the page spells the prices out (the Terms, the paywall) reads from the same list.
@@ -266,9 +284,9 @@ function fillPlanTexts() {
 }
 async function loadPlans() {
   try {
-    const { data, error } = await sb.from("plans").select("months, price").order("months");
+    const { data, error } = await sb.from("plan_offers").select("id, title, description, months, price, badge, active, sort_order").order("sort_order");
     if (!error && data?.length) setPlans(data);
-  } catch (e) { /* keep the built-in defaults */ }
+  } catch (e) { /* keep the built-in plans */ }
   renderPlanPicker();
   fillPlanTexts();
 }
@@ -279,6 +297,8 @@ const ROLES = { student: "Student", parent: "Parent / guardian", teacher: "Teach
 const roleKey = (email) => `apex-role-${String(email || "").toLowerCase()}`;
 const levelKeyFor = (email) => `apex-year-${String(email || "").toLowerCase()}`;
 const planKey = (email) => `apex-plan-${String(email || "").toLowerCase()}`;
+// What the person picked at sign-up: { months, name } (older versions stored just the number of months).
+const storedPlan = (email) => { const v = store(planKey(email)); return v && typeof v === "object" ? { months: Number(v.months) || 4, name: v.name || "" } : { months: Number(v) || 4, name: "" }; };
 const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x.toISOString(); };
 
 // ---------------- AI daily usage limits (tutor chat + AI-made tests; admins are exempt) ----------------
@@ -571,15 +591,16 @@ $("#auth-form").addEventListener("submit", async (e) => {
       if (error) throw error;
       store(`apex-terms-seen-${email}`, TERMS_VERSION);
       const planPick = $('input[name="auth-plan"]:checked');
-      if (planPick && chosenRole() !== "parent") store(planKey(email), +planPick.value);
+      const pickedPlan = planPick && chosenRole() !== "parent" ? PLAN_LIST.find((p) => p.id === planPick.value) : null;
+      if (pickedPlan) store(planKey(email), { months: pickedPlan.months, name: pickedPlan.title });
       store(roleKey(email), $('input[name="auth-role"]:checked').value);
       const pickedLevel = chosenRole() === "student" ? $("#auth-level").value : "";
       if (pickedLevel) store(levelKeyFor(email), pickedLevel);
       if (data.session && data.user) {
-        const planMonths = planPick && chosenRole() !== "parent" ? +planPick.value : 4;
+        const planMonths = pickedPlan ? pickedPlan.months : 4;
         const role = $('input[name="auth-role"]:checked').value;
         const base = { id: data.user.id, email, username: name, has_paid: false, agreed_to_terms: true };
-        await insertProfile(base, { plan_months: planMonths, account_type: role, ...(pickedLevel ? { year_level: pickedLevel } : {}) });
+        await insertProfile(base, { plan_months: planMonths, ...(pickedPlan ? { plan_name: pickedPlan.title } : {}), account_type: role, ...(pickedLevel ? { year_level: pickedLevel } : {}) });
         claimNewSession = true;
         await handleAuthenticatedUser(data.user);
       } else {
@@ -674,7 +695,7 @@ async function selectDroppingMissing(run, required, optional) {
 // Creates the profile row. The newer columns might not exist in the database yet, so if the insert fails it tries again
 // without the optional ones (year level first, then account type, then plan).
 async function insertProfile(base, extras) {
-  const order = ["year_level", "account_type", "plan_months"];
+  const order = ["year_level", "account_type", "plan_name", "plan_months"];
   const fields = { ...extras };
   for (let i = 0; i <= order.length; i++) {
     const { error } = await sb.from("profiles").insert({ ...base, ...fields });
@@ -691,22 +712,22 @@ async function handleAuthenticatedUser(user, retried = false) {
   let { data: profile, error } = await selectDroppingMissing(
     (cols) => sb.from("profiles").select(cols).eq("id", user.id).single(),
     ["username", "has_paid", "paid_until", "points", "xp", "progress", "friends", "is_admin"],
-    ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "account_type", "active_session", "allow_multi_device", "year_level", "show_points"],
+    ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "plan_name", "account_type", "active_session", "allow_multi_device", "year_level", "show_points"],
   );
   if (error?.code === "PGRST116") {
-    const chosen = store(planKey(user.email)) || 4;
+    const chosen = storedPlan(user.email);
     const row = { id: user.id, email: user.email, has_paid: false, points: 0, progress: {} };
     const role = store(roleKey(user.email)) || "student";
     const lvl = store(levelKeyFor(user.email)) || "";
-    await insertProfile(row, { plan_months: chosen, account_type: role, ...(role === "student" && LEARN_LEVELS[lvl] && lvl !== "auto" ? { year_level: lvl } : {}) });
+    await insertProfile(row, { plan_months: chosen.months, ...(chosen.name ? { plan_name: chosen.name } : {}), account_type: role, ...(role === "student" && LEARN_LEVELS[lvl] && lvl !== "auto" ? { year_level: lvl } : {}) });
     if (role === "parent" && !retried) return handleAuthenticatedUser(user, true); // parent accounts are free
-    return showPaywall(chosen);
+    return showPaywall(chosen.months, chosen.name);
   }
   if (error) { console.error("Apex: profile fetch failed —", error); return showPaywall(); }
 
   const active = profile.has_paid && (!profile.paid_until || new Date(profile.paid_until) > new Date());
   const freeParent = profile.account_type === "parent" && !profile.is_admin; // parent accounts are free, and view-only
-  if (!active && !freeParent) return showPaywall(profile.plan_months || store(planKey(user.email)) || 4);
+  if (!active && !freeParent) { const sp = storedPlan(user.email); return showPaywall(profile.plan_months || sp.months, profile.plan_name || sp.name); }
 
   const claim = await claimDevice(profile, fresh);
   if (!claim.ok) { await logout(); showDeviceKickedMessage(); return; }
@@ -722,6 +743,7 @@ async function handleAuthenticatedUser(user, retried = false) {
     isTeacher: !!profile.is_teacher,
     aiBonusPct: profile.ai_bonus_pct || 0,
     planMonths: profile.plan_months || 4,
+    planName: profile.plan_name || "",
     accountType: ROLES[profile.account_type] ? profile.account_type : "student",
     multiDevice: !!profile.is_admin || !!profile.allow_multi_device,
     yearLevel: LEARN_LEVELS[profile.year_level] ? profile.year_level : null,
@@ -735,9 +757,9 @@ async function handleAuthenticatedUser(user, retried = false) {
   enterApp();
 }
 
-function showPaywall(planMonths = 4) {
+function showPaywall(planMonths = 4, planName = "") {
   $("#paywall-email").textContent = authUser?.email || "";
-  $("#paywall-plan").textContent = planText(planMonths);
+  $("#paywall-plan").textContent = planLine(planMonths, planName);
   showScreen("paywall");
 }
 
@@ -3589,8 +3611,8 @@ function pageSettings(view) {
     <div class="card stack">
       <p style="margin:0;">${subText}</p>
       <p style="margin:0;">Account type: <strong>${esc(ROLES[me.accountType])}</strong>${me.accountType === "teacher" && !me.isTeacher ? ` <span class="tag bad">awaiting verification by the site owner</span>` : me.isTeacher ? ` <span class="tag good">verified</span>` : ""}</p>
-      <p style="margin:0;">Your plan: <strong>${esc(planInfo(me.planMonths).label)}</strong> <span class="muted small">(${esc(planText(me.planMonths))})</span></p>
-      <p class="muted small" style="margin:0;">To renew, pay <strong>${money(planInfo(me.planMonths).price)} cash in hand</strong> to the site owner for another ${esc(planInfo(me.planMonths).label)}. Accounts are unlocked by hand, so it may take a while.</p>
+      <p style="margin:0;">Your plan: <strong>${esc(planInfo(me.planMonths, me.planName).title)}</strong> <span class="muted small">(${esc(planText(me.planMonths, me.planName))})</span></p>
+      <p class="muted small" style="margin:0;">To renew, pay <strong>${money(planInfo(me.planMonths, me.planName).price)} cash in hand</strong> to the site owner for another ${esc(planInfo(me.planMonths, me.planName).label)}. Accounts are unlocked by hand, so it may take a while.</p>
     </div>
 
     <div class="section-label">Your level</div>
@@ -3865,14 +3887,14 @@ function pageAdmin(view) {
 
     <div class="section-label">💲 Plans &amp; prices</div>
     <div class="card stack">
-      <p class="muted small" style="margin:0;">The plans people can choose when they sign up, and the prices shown on the sign-up page, the paywall, Settings and the Terms. Change a price or add a plan any time. Parent accounts are free. Accounts on a plan you remove count as the nearest plan.</p>
-      <div id="plans-list"></div>
-      <div class="row" style="flex-wrap:nowrap; align-items:flex-end; gap:8px;">
-        <div style="flex:1;"><label class="field" for="plan-new-months">Months</label><input type="number" id="plan-new-months" min="1" max="120" step="1" placeholder="e.g. 12"></div>
-        <div style="flex:1;"><label class="field" for="plan-new-price">Price ($)</label><input type="number" id="plan-new-price" min="0" max="10000" step="0.5" placeholder="e.g. 40"></div>
+      <p class="muted small" style="margin:0;">Make the plans people can choose when they sign up. Give each plan a title, a short description, how many months it lasts and a price (and a badge like "Best value" if you want). Turn a plan off to hide it from the sign-up page without deleting it. Parent accounts are free.</p>
+      <div id="plans-list" class="plan-admin-list"></div>
+      <div class="plan-admin-new">
+        <div class="manage-title">➕ Add a new plan</div>
+        <div id="plan-new"></div>
         <button class="btn" id="plan-add" type="button">Add plan</button>
       </div>
-      <div class="small" id="plan-status"></div>
+      <div class="small" id="plan-status" role="status"></div>
     </div>
 
     <div class="section-label">📢 Announcements</div>
@@ -3980,7 +4002,7 @@ function pageAdmin(view) {
         <div class="list-row" style="${a.deleted ? "opacity:.5;" : ""}">
           ${a.deleted ? "" : `<input type="checkbox" class="pick-acct" data-pick="${a.id}" aria-label="Tick ${esc(a.username || a.email)} for gifts"${picked.has(a.id) ? " checked" : ""}>`}
           <div class="grow">
-            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}${a.is_teacher ? ` <span class="tag">teacher</span>` : ""} <span class="tag">${esc(planInfo(a.plan_months).label)} plan</span>${a.allow_multi_device ? ` <span class="tag good">multi-device</span>` : ""}${a.year_level && LEARN_LEVELS[a.year_level] ? ` <span class="tag">🎓 ${esc(LEARN_LEVELS[a.year_level].short || LEARN_LEVELS[a.year_level].label)}</span>` : ""}${a.account_type === "parent" ? ` <span class="tag">parent</span>` : ""}${a.account_type === "teacher" && !a.is_teacher ? ` <span class="tag bad">teacher — awaiting verification</span>` : ""}
+            <strong>${esc(a.username || "(no name)")}</strong>${isMe ? " (you)" : ""}${a.is_admin ? ` <span class="tag">admin</span>` : ""}${a.is_teacher ? ` <span class="tag">teacher</span>` : ""} <span class="tag">${esc(planInfo(a.plan_months, a.plan_name).title)} plan</span>${a.allow_multi_device ? ` <span class="tag good">multi-device</span>` : ""}${a.year_level && LEARN_LEVELS[a.year_level] ? ` <span class="tag">🎓 ${esc(LEARN_LEVELS[a.year_level].short || LEARN_LEVELS[a.year_level].label)}</span>` : ""}${a.account_type === "parent" ? ` <span class="tag">parent</span>` : ""}${a.account_type === "teacher" && !a.is_teacher ? ` <span class="tag bad">teacher — awaiting verification</span>` : ""}
             <div class="muted small">${esc(a.email)} · ${a.points || 0} pts · ${a.xp || 0} XP${a.game_data ? ` · 🏅 ${Object.keys(a.game_data.badges || {}).length} badges` : ""} · ${attemptedOf(a.progress)} answered · seen ${timeAgo(a.last_seen)}</div>
           </div>
           ${statusTag(a)}
@@ -4021,49 +4043,71 @@ function pageAdmin(view) {
 
   // ----- Plans & prices -----
   const planStatus = (text, bad) => { const el = $("#plan-status", view); el.textContent = text; el.className = bad ? "small error" : "small muted"; };
-  const planSqlHint = "Couldn't save — the plans table isn't set up yet. Run the plans SQL (supabase/plans-table.sql) once, then try again.";
+  const planSqlHint = "Couldn't save — the plans table isn't set up yet. Run the plans SQL (supabase/plan-offers.sql) once, then try again.";
+  const planFormHTML = (p = {}) => `
+    <div class="plan-fields">
+      <label>Title<input type="text" maxlength="40" data-pf="title" value="${esc(p.title || "")}" placeholder="e.g. Term pass"></label>
+      <label>Months<input type="number" min="1" max="120" step="1" data-pf="months" value="${p.months ?? ""}" placeholder="3"></label>
+      <label>Price ($)<input type="number" min="0" max="10000" step="0.5" data-pf="price" value="${p.price ?? ""}" placeholder="20"></label>
+      <label class="wide">Description<input type="text" maxlength="140" data-pf="description" value="${esc(p.description || "")}" placeholder="e.g. One school term of practice"></label>
+      <label>Badge<input type="text" maxlength="24" data-pf="badge" value="${esc(p.badge || "")}" placeholder="e.g. Best value"></label>
+      <label>Order<input type="number" step="1" data-pf="sort" value="${p.sort ?? 0}"></label>
+      <label class="check"><input type="checkbox" data-pf="active"${p.active === false ? "" : " checked"}> Show on sign-up</label>
+    </div>`;
+  const readPlanForm = (box) => {
+    const g = (k) => $(`[data-pf="${k}"]`, box);
+    return { title: g("title").value.trim(), months: parseInt(g("months").value, 10), price: parseFloat(g("price").value),
+      description: g("description").value.trim(), badge: g("badge").value.trim(), sort_order: parseInt(g("sort").value, 10) || 0, active: g("active").checked };
+  };
+  const checkPlan = (v) => {
+    if (!v.title) return "Give the plan a title.";
+    if (!(v.months >= 1 && v.months <= 120)) return "Months must be a whole number from 1 to 120.";
+    if (!(v.price >= 0 && v.price <= 10000)) return "Enter a price from $0 to $10,000.";
+    return "";
+  };
   function drawPlansAdmin() {
-    $("#plans-list", view).innerHTML = PLAN_LIST.map((p) => `
-      <div class="list-row" data-plan-row="${p.months}">
-        <div class="grow"><strong>${esc(monthsLabel(p.months))}</strong>${planSaving(p) > 0 ? ` <span class="muted small">· saves ${esc(money(planSaving(p)))}</span>` : ""}</div>
-        <span>$</span><input type="number" min="0" max="10000" step="0.5" value="${p.price}" data-plan-price="${p.months}" style="width:96px;" aria-label="Price for ${esc(monthsLabel(p.months))}">
-        <button class="btn secondary sm" type="button" data-plan-save="${p.months}">Save</button>
-        <button class="btn ghost sm" type="button" data-plan-del="${p.months}">Remove</button>
+    $("#plans-list", view).innerHTML = (PLANS_FROM_DB ? "" : `<div class="banner info">These are the built-in plans. Run <b>supabase/plan-offers.sql</b> once to be able to change them and add your own.</div>`) + ALL_PLANS.map((p) => `
+      <div class="plan-admin${p.active ? "" : " off"}" data-plan-box="${esc(p.id)}">
+        <div class="row between"><strong>${esc(p.title)}${p.badge ? ` <span class="tag good">${esc(p.badge)}</span>` : ""}${p.active ? "" : ` <span class="tag">hidden</span>`}</strong>
+          <span class="muted small">${esc(money(p.price))} for ${esc(monthsLabel(p.months))}${planSaving(p) > 0 ? ` · saves ${esc(money(planSaving(p)))}` : ""}</span></div>
+        ${planFormHTML(p)}
+        <div class="row" style="gap:8px;"><button class="btn secondary sm" type="button" data-plan-save="${esc(p.id)}">Save</button><button class="btn ghost sm" type="button" data-plan-del="${esc(p.id)}">Delete</button></div>
       </div>`).join("");
+    $("#plan-new", view).innerHTML = planFormHTML({ sort: ALL_PLANS.length });
   }
-  async function savePlan(months, price) {
-    if (!(months >= 1 && months <= 120)) return planStatus("Months must be a whole number from 1 to 120.", true);
-    if (!(price >= 0 && price <= 10000)) return planStatus("Enter a price from $0 to $10,000.", true);
-    if (!PLAN_LIST.some((p) => p.months === months) && PLAN_LIST.length >= 6) return planStatus("You can have up to 6 plans.", true);
-    const { error } = await sb.from("plans").upsert({ months, price }, { onConflict: "months" });
-    if (error) return planStatus(planSqlHint, true);
+  async function afterPlanChange(message) {
     await loadPlans();
     drawPlansAdmin(); drawAccounts();
-    planStatus(`Saved: ${planText(months)}. It's live now.`);
+    planStatus(message);
   }
   drawPlansAdmin();
   $("#plans-list", view).addEventListener("click", async (e) => {
     const save = e.target.closest("[data-plan-save]"), del = e.target.closest("[data-plan-del]");
     if (save) {
-      const m = +save.dataset.planSave;
-      return savePlan(m, parseFloat($(`[data-plan-price="${m}"]`, view).value));
+      if (!PLANS_FROM_DB) return planStatus(planSqlHint, true);
+      const v = readPlanForm(save.closest("[data-plan-box]")), bad = checkPlan(v);
+      if (bad) return planStatus(bad, true);
+      const { error } = await sb.from("plan_offers").update(v).eq("id", save.dataset.planSave);
+      if (error) return planStatus(planSqlHint, true);
+      return afterPlanChange(`Saved "${v.title}". It's live now.`);
     }
     if (del) {
-      const m = +del.dataset.planDel;
-      if (PLAN_LIST.length <= 1) return planStatus("You need at least one plan.", true);
-      if (!confirm(`Remove the ${monthsLabel(m)} plan? People already on it keep their time, and are treated as the nearest plan.`)) return;
-      const { error } = await sb.from("plans").delete().eq("months", m);
+      if (!PLANS_FROM_DB) return planStatus(planSqlHint, true);
+      const p = ALL_PLANS.find((x) => x.id === del.dataset.planDel);
+      if (ALL_PLANS.length <= 1) return planStatus("You need at least one plan.", true);
+      if (!confirm(`Delete the plan "${p?.title}"? People already on it keep their time, and are treated as the nearest plan.`)) return;
+      const { error } = await sb.from("plan_offers").delete().eq("id", del.dataset.planDel);
       if (error) return planStatus(planSqlHint, true);
-      await loadPlans();
-      drawPlansAdmin(); drawAccounts();
-      planStatus(`Removed the ${monthsLabel(m)} plan.`);
+      afterPlanChange(`Deleted "${p?.title}".`);
     }
   });
   $("#plan-add", view).addEventListener("click", async () => {
-    const m = parseInt($("#plan-new-months", view).value, 10), p = parseFloat($("#plan-new-price", view).value);
-    if (isNaN(m) || isNaN(p)) return planStatus("Enter the number of months and the price.", true);
-    await savePlan(m, p);
-    if (PLAN_LIST.some((x) => x.months === m)) { $("#plan-new-months", view).value = ""; $("#plan-new-price", view).value = ""; }
+    const v = readPlanForm($("#plan-new", view)), bad = checkPlan(v);
+    if (bad) return planStatus(bad, true);
+    if (ALL_PLANS.length >= 8 && PLANS_FROM_DB) return planStatus("You can have up to 8 plans.", true);
+    const { error } = await sb.from("plan_offers").insert(v);
+    if (error) return planStatus(planSqlHint, true);
+    afterPlanChange(`Added "${v.title}". It's live now.`);
   });
 
   // ----- Gifts -----
@@ -4166,7 +4210,7 @@ function pageAdmin(view) {
         // Positive = add months (from the later of today or the current expiry); negative = take months off the current expiry.
         const active = a.paid_until && new Date(a.paid_until) > new Date();
         const from = active ? a.paid_until : new Date();
-        const n = askNumber(`How many months should ${name} get? Use a minus number to take months away, e.g. -1. (their plan is ${planInfo(a.plan_months).label})`, planInfo(a.plan_months).months);
+        const n = askNumber(`How many months should ${name} get? Use a minus number to take months away, e.g. -1. (their plan is ${planInfo(a.plan_months, a.plan_name).title})`, planInfo(a.plan_months, a.plan_name).months);
         if (n === null) break;
         if (n === 0 || Math.abs(n) > 120) { alert("Enter a number of months between 1 and 120 (or -1 to -120 to take months away)."); break; }
         if (n > 0) {
@@ -4212,7 +4256,7 @@ function pageAdmin(view) {
         if (confirm(`Reset all points and progress for ${name}? This can't be undone.`)) update = { points: 0, progress: {} };
         break;
       case "kick":
-        if (confirm(`${a.has_paid ? "Suspend" : "Reinstate"} ${name}?`)) update = a.has_paid ? { has_paid: false } : { has_paid: true, paid_until: monthsFrom(new Date(), planInfo(a.plan_months).months) };
+        if (confirm(`${a.has_paid ? "Suspend" : "Reinstate"} ${name}?`)) update = a.has_paid ? { has_paid: false } : { has_paid: true, paid_until: monthsFrom(new Date(), planInfo(a.plan_months, a.plan_name).months) };
         break;
       case "delete":
         if (!confirm(`Delete ${name}'s account? They'll be removed from the leaderboard and lose access.`)) break;
@@ -4241,7 +4285,7 @@ function pageAdmin(view) {
     const { data, error } = await selectDroppingMissing(
       (cols) => sb.from("profiles").select(cols),
       ["id", "username", "email", "points", "xp", "has_paid", "paid_until", "is_admin", "progress"],
-      ["is_teacher", "ai_bonus_pct", "plan_months", "account_type", "allow_multi_device", "year_level", "last_seen", "deleted", "game_data"],
+      ["is_teacher", "ai_bonus_pct", "plan_months", "plan_name", "account_type", "allow_multi_device", "year_level", "last_seen", "deleted", "game_data"],
     );
     if (error) { $("#accts", view).innerHTML = `<p class="muted">Couldn't load accounts.</p>`; return; }
     accounts = (data || []).sort((x, y) => (!!x.deleted - !!y.deleted) || (y.points || 0) - (x.points || 0));
