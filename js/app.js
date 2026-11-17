@@ -3896,7 +3896,7 @@ function pageAdmin(view) {
               ${btn("fix-login", "🔑 Fix login")}
               ${btn("add-points", "+10 pts")}${btn("set-points", "Set pts…")}
               ${btn("add-xp", "+10 XP")}${btn("set-xp", "Set XP…")}
-              ${btn("renew", "Add months…")}
+              ${btn("renew", "Add / take months…")}
               ${btn("toggle-admin", a.is_admin ? "Remove admin" : "Make admin")}
               ${btn("set-level", `Year level${a.year_level && LEARN_LEVELS[a.year_level] ? ` (${LEARN_LEVELS[a.year_level].short || LEARN_LEVELS[a.year_level].label})` : "…"}`)}
               ${btn("toggle-multi", a.allow_multi_device ? "Multi-device: ON" : "Allow multiple devices")}
@@ -4010,13 +4010,23 @@ function pageAdmin(view) {
       case "add-xp": update = { xp: (a.xp || 0) + 10 }; break;
       case "set-xp": { const n = askNumber(`Set XP for ${name}:`); if (n !== null) update = { xp: n }; break; }
       case "renew": {
-        // Extend from the later of today or the current expiry.
-        const from = a.paid_until && new Date(a.paid_until) > new Date() ? a.paid_until : new Date();
-        const n = askNumber(`How many months should ${name} get? (their plan is ${planInfo(a.plan_months).label})`, planInfo(a.plan_months).months);
+        // Positive = add months (from the later of today or the current expiry); negative = take months off the current expiry.
+        const active = a.paid_until && new Date(a.paid_until) > new Date();
+        const from = active ? a.paid_until : new Date();
+        const n = askNumber(`How many months should ${name} get? Use a minus number to take months away, e.g. -1. (their plan is ${planInfo(a.plan_months).label})`, planInfo(a.plan_months).months);
         if (n === null) break;
-        if (n < 1 || n > 120) { alert("Enter a number of months between 1 and 120."); break; }
-        const until = monthsFrom(from, n);
-        if (confirm(`Add ${n} month${n === 1 ? "" : "s"} for ${name}, until ${fmtDate(until)}?`)) update = { has_paid: true, paid_until: until, deleted: false };
+        if (n === 0 || Math.abs(n) > 120) { alert("Enter a number of months between 1 and 120 (or -1 to -120 to take months away)."); break; }
+        if (n > 0) {
+          const until = monthsFrom(from, n);
+          if (confirm(`Add ${n} month${n === 1 ? "" : "s"} for ${name}, until ${fmtDate(until)}?`)) update = { has_paid: true, paid_until: until, deleted: false };
+          break;
+        }
+        const k = -n;
+        if (!a.paid_until) { alert(`${name} has no paid time to take months from.`); break; }
+        const until = monthsFrom(a.paid_until, n);
+        if (new Date(until) <= new Date()) {
+          if (confirm(`Taking ${k} month${k === 1 ? "" : "s"} leaves nothing for ${name}, so their access will be paused now. Continue?`)) update = { has_paid: false, paid_until: until };
+        } else if (confirm(`Take ${k} month${k === 1 ? "" : "s"} off ${name}? Their time will end on ${fmtDate(until)}.`)) update = { paid_until: until };
         break;
       }
       case "toggle-admin":
