@@ -15,15 +15,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261117g">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261117h">
 <!-- Home-screen icon: iPhone/iPad use apple-touch-icon, Android uses the manifest -->
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261117g">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261117h">
 <meta name="apple-mobile-web-app-title" content="JINtelligence">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#8A1C3C">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="css/styles.css?v=20261117g">
+<link rel="stylesheet" href="css/styles.css?v=20261117h">
 <script>
   // Apply the saved theme before first paint to avoid a flash.
   try { const t = localStorage.getItem("apex-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
@@ -33,11 +33,11 @@
 <body>
 
 <template id="logo-tpl">
-  <img class="logo-mark" src="assets/logo.svg?v=20261117g" alt="">
+  <img class="logo-mark" src="assets/logo.svg?v=20261117h" alt="">
 </template>
 <template id="crest-tpl">
-  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261117g" alt="JINtelligence">
-  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261117g" alt="JINtelligence">
+  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261117h" alt="JINtelligence">
+  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261117h" alt="JINtelligence">
 </template>
 
 <!-- Loading -->
@@ -82,6 +82,11 @@
             <label class="choice plan"><input type="radio" name="auth-plan" value="1"><span><b>$7</b><small>1 month</small></span></label>
             <label class="choice plan"><input type="radio" name="auth-plan" value="4"><span><b>$15</b><small>4 months · save $13</small></span></label>
           </div>
+        </div>
+        <div id="auth-level-field" class="hidden signup-group">
+          <div class="signup-label">Your year level <span>· you can't change it later</span></div>
+          <select id="auth-level"><option value="">Choose your year level…</option></select>
+          <div class="signup-hint">Pick carefully: the AI, tests and questions are pitched at this level. Only the site owner can change it afterwards.</div>
         </div>
         <div id="auth-age-field" class="hidden signup-group">
           <div class="signup-label">Your age</div>
@@ -235,7 +240,7 @@
   <div class="card stack" style="max-width:560px;">
     <div class="row between"><h2 style="margin:0;">Terms and Conditions</h2><button class="btn ghost" data-close>✕</button></div>
     <div class="small muted" style="max-height:60vh; overflow-y:auto;">
-      <p><strong>1. What this is.</strong> JINtelligence (formerly Apex Learning Academy) is a paid maths, English and science practice site covering the Year 7 Victorian Curriculum. Access costs <strong>$7 AUD for 1 month or $15 AUD for 4 months</strong> per account, whichever plan you choose when you sign up. Parent accounts are free but view-only: they can see the topics and a linked child's grades, but can't do practice questions, tests or games, or use the AI tutor. A parent account must not be given to a student to use; accounts that are misused may be changed or suspended.</p>
+      <p><strong>1. What this is.</strong> JINtelligence (formerly Apex Learning Academy) is a paid maths, English and science practice site covering the Year 7 Victorian Curriculum. Access costs <strong>$7 AUD for 1 month or $15 AUD for 4 months</strong> per account, whichever plan you choose when you sign up. Parent accounts are free but view-only: they can see the topics and a linked child's grades, but can't do practice questions, tests or games, or use the AI tutor. Students choose their year level when they sign up; after that it is locked and only the site owner can change it. A parent account must not be given to a student to use; accounts that are misused may be changed or suspended.</p>
       <p><strong>2. Payment.</strong> Payment is <strong>cash in hand only</strong>, paid directly to the site owner. No card, bank transfer or online payments are accepted, and nothing is charged through this website. Accounts are unlocked by hand by the owner, so <strong>it may take a while for your account to be unlocked</strong> after you've paid (usually within a few days). Your plan (1 month or 4 months) starts from the day your account is unlocked.</p>
       <p><strong>3. Renewing.</strong> To keep using the site after your plan ends, pay for another plan ($7 for 1 month or $15 for 4 months) cash in hand. If you don't renew, your account is paused until you do; your progress is kept.</p>
       <p class="terms-refund"><strong>4. No refunds.</strong> All payments are final. <strong>No refunds will be given</strong> once payment has been made, including if you stop using the site before your plan is up.</p>
@@ -272,34 +277,34 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/data.js?v=20261117g"></script>
-<script src="js/lessons.js?v=20261117g"></script>
-<script src="js/visuals.js?v=20261117g"></script>
-<script src="js/sci-visuals.js?v=20261117g"></script>
-<script src="js/science.js?v=20261117g"></script>
-<script src="js/history-geo.js?v=20261117g"></script>
-<script src="js/bank.js?v=20261117g"></script>
-<script src="js/topics-more.js?v=20261117g"></script>
-<script src="js/challenge.js?v=20261117g"></script>
-<script src="js/coverage.js?v=20261117g"></script>
-<script src="js/problems.js?v=20261117g"></script>
-<script src="js/year8-10.js?v=20261117g"></script>
-<script src="js/uploads.js?v=20261117g"></script>
-<script src="js/study.js?v=20261117g"></script>
-<script src="js/saved-tests.js?v=20261117g"></script>
-<script src="js/review.js?v=20261117g"></script>
-<script src="js/results.js?v=20261117g"></script>
-<script src="js/devices.js?v=20261117g"></script>
-<script src="js/teacher.js?v=20261117g"></script>
-<script src="js/parent.js?v=20261117g"></script>
-<script src="js/voice.js?v=20261117g"></script>
-<script src="js/notes.js?v=20261117g"></script>
-<script src="js/public-tests.js?v=20261117g"></script>
-<script src="js/ai-memory.js?v=20261117g"></script>
-<script src="js/calendar.js?v=20261117g"></script>
-<script src="js/game-art.js?v=20261117g"></script>
-<script src="js/games.js?v=20261117g"></script>
-<script src="js/gifts.js?v=20261117g"></script>
-<script src="js/app.js?v=20261117g"></script>
+<script src="js/data.js?v=20261117h"></script>
+<script src="js/lessons.js?v=20261117h"></script>
+<script src="js/visuals.js?v=20261117h"></script>
+<script src="js/sci-visuals.js?v=20261117h"></script>
+<script src="js/science.js?v=20261117h"></script>
+<script src="js/history-geo.js?v=20261117h"></script>
+<script src="js/bank.js?v=20261117h"></script>
+<script src="js/topics-more.js?v=20261117h"></script>
+<script src="js/challenge.js?v=20261117h"></script>
+<script src="js/coverage.js?v=20261117h"></script>
+<script src="js/problems.js?v=20261117h"></script>
+<script src="js/year8-10.js?v=20261117h"></script>
+<script src="js/uploads.js?v=20261117h"></script>
+<script src="js/study.js?v=20261117h"></script>
+<script src="js/saved-tests.js?v=20261117h"></script>
+<script src="js/review.js?v=20261117h"></script>
+<script src="js/results.js?v=20261117h"></script>
+<script src="js/devices.js?v=20261117h"></script>
+<script src="js/teacher.js?v=20261117h"></script>
+<script src="js/parent.js?v=20261117h"></script>
+<script src="js/voice.js?v=20261117h"></script>
+<script src="js/notes.js?v=20261117h"></script>
+<script src="js/public-tests.js?v=20261117h"></script>
+<script src="js/ai-memory.js?v=20261117h"></script>
+<script src="js/calendar.js?v=20261117h"></script>
+<script src="js/game-art.js?v=20261117h"></script>
+<script src="js/games.js?v=20261117h"></script>
+<script src="js/gifts.js?v=20261117h"></script>
+<script src="js/app.js?v=20261117h"></script>
 </body>
 </html>

@@ -38,7 +38,8 @@ begin
     new.is_teacher := false;
     new.ai_bonus_pct := 0;
     new.allow_multi_device := false;
-    new.year_level := null;
+    -- a student picks their year level when they sign up; after that only an admin can change it (see the update branch below)
+    if new.year_level is not null and new.year_level not in ('p2','y34','y56','y7','y8','y9','y10','y11','y12','uni','adult') then new.year_level := null; end if;
     new.deleted := false;
     return new;
   end if;

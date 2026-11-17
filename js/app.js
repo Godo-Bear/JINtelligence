@@ -224,6 +224,7 @@ const planInfo = (months) => PLANS[months] || PLANS[4];
 const planText = (months) => { const p = planInfo(months); return `$${p.price} for ${p.label}`; };
 const ROLES = { student: "Student", parent: "Parent / guardian", teacher: "Teacher" };
 const roleKey = (email) => `apex-role-${String(email || "").toLowerCase()}`;
+const levelKeyFor = (email) => `apex-year-${String(email || "").toLowerCase()}`;
 const planKey = (email) => `apex-plan-${String(email || "").toLowerCase()}`;
 const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x.toISOString(); };
 
@@ -464,7 +465,10 @@ $$("[data-auth-mode]").forEach((btn) => btn.addEventListener("click", () => {
 
 // Parent accounts are free (and view-only), so the plan picker is only for students and teachers.
 const chosenRole = () => $('input[name="auth-role"]:checked')?.value || "";
-function syncPlanField() { $("#auth-plan-field").classList.toggle("hidden", authMode !== "signup" || chosenRole() === "parent"); }
+function syncPlanField() {
+  $("#auth-plan-field").classList.toggle("hidden", authMode !== "signup" || chosenRole() === "parent");
+  $("#auth-level-field").classList.toggle("hidden", authMode !== "signup" || chosenRole() !== "student"); // students pick their year level once, at sign-up
+}
 const ROLE_HINTS = {
   student: "Practise, take tests and use the AI tutor.",
   parent: "Free! View-only: see the topics and your child's grades, using a code from their account. No practice, tests or AI.",
@@ -500,6 +504,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
     if (name.length < 3) return setMsg(msg, "Display name needs at least 3 characters.", "error");
     if (!$('input[name="auth-role"]:checked')) return setMsg(msg, "Please choose whether you are a student, parent or teacher.", "error");
     if (chosenRole() !== "parent" && !$('input[name="auth-plan"]:checked')) return setMsg(msg, "Please choose a plan: $7 for 1 month or $15 for 4 months.", "error");
+    if (chosenRole() === "student" && !$("#auth-level").value) return setMsg(msg, "Please choose your year level. You can't change it after this.", "error");
     if (!$("#auth-terms").checked) return setMsg(msg, "Please agree to the Terms & Conditions.", "error");
     if ($("#auth-age-under").checked && !$("#auth-parent-consent").checked) {
       return setMsg(msg, "A parent or guardian needs to agree on your behalf — please tick the box.", "error");
@@ -515,13 +520,13 @@ $("#auth-form").addEventListener("submit", async (e) => {
       const planPick = $('input[name="auth-plan"]:checked');
       if (planPick && chosenRole() !== "parent") store(planKey(email), +planPick.value);
       store(roleKey(email), $('input[name="auth-role"]:checked').value);
+      const pickedLevel = chosenRole() === "student" ? $("#auth-level").value : "";
+      if (pickedLevel) store(levelKeyFor(email), pickedLevel);
       if (data.session && data.user) {
         const planMonths = planPick && chosenRole() !== "parent" ? +planPick.value : 4;
         const role = $('input[name="auth-role"]:checked').value;
         const base = { id: data.user.id, email, username: name, has_paid: false, agreed_to_terms: true };
-        let ins = await sb.from("profiles").insert({ ...base, plan_months: planMonths, account_type: role });
-        if (ins.error) ins = await sb.from("profiles").insert({ ...base, plan_months: planMonths });
-        if (ins.error) await sb.from("profiles").insert(base);
+        await insertProfile(base, { plan_months: planMonths, account_type: role, ...(pickedLevel ? { year_level: pickedLevel } : {}) });
         claimNewSession = true;
         await handleAuthenticatedUser(data.user);
       } else {
@@ -613,6 +618,18 @@ async function selectDroppingMissing(run, required, optional) {
   }
   return result;
 }
+// Creates the profile row. The newer columns might not exist in the database yet, so if the insert fails it tries again
+// without the optional ones (year level first, then account type, then plan).
+async function insertProfile(base, extras) {
+  const order = ["year_level", "account_type", "plan_months"];
+  const fields = { ...extras };
+  for (let i = 0; i <= order.length; i++) {
+    const { error } = await sb.from("profiles").insert({ ...base, ...fields });
+    if (!error) return true;
+    if (i < order.length) delete fields[order[i]];
+  }
+  return false;
+}
 let claimNewSession = false; // set when the person has just typed their password (a fresh login on this device)
 
 async function handleAuthenticatedUser(user, retried = false) {
@@ -627,9 +644,8 @@ async function handleAuthenticatedUser(user, retried = false) {
     const chosen = store(planKey(user.email)) || 4;
     const row = { id: user.id, email: user.email, has_paid: false, points: 0, progress: {} };
     const role = store(roleKey(user.email)) || "student";
-    let ins = await sb.from("profiles").insert({ ...row, plan_months: chosen, account_type: role });
-    if (ins.error) ins = await sb.from("profiles").insert({ ...row, plan_months: chosen });
-    if (ins.error) await sb.from("profiles").insert(row);
+    const lvl = store(levelKeyFor(user.email)) || "";
+    await insertProfile(row, { plan_months: chosen, account_type: role, ...(role === "student" && LEARN_LEVELS[lvl] && lvl !== "auto" ? { year_level: lvl } : {}) });
     if (role === "parent" && !retried) return handleAuthenticatedUser(user, true); // parent accounts are free
     return showPaywall(chosen);
   }
@@ -748,7 +764,7 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-17b";
+const TERMS_VERSION = "2026-11-17c";
 const TERMS_CHANGES = [
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
@@ -756,6 +772,7 @@ const TERMS_CHANGES = [
   "New — AI memory: your AI tutor chats are saved to your account, and the AI can remember short notes about you (like topics you find tricky) to help you next time. You can see, delete or turn this off in Settings.",
   "New — public tests: you can share tests with everyone on JINtelligence. Shared tests show your name (unless you turn it off), must follow the behaviour rules, and can be removed by the site owner.",
   "New — plans: choose $7 for 1 month or $15 for 4 months when you sign up, paid cash in hand to the site owner. Your plan shows in Settings.",
+  "New — year level: students choose their year level when they sign up. After that it's locked, so the AI, tests and questions stay at that level; only the site owner can change it if it was a mistake.",
   "New — parent accounts: free to make, but view-only. A parent account can see the topics and a linked child's grades. It can't do practice questions, tests, games or use the AI tutor — those are for student accounts, and a parent account must not be given to a student to use.",
   "New — one device: your account can be logged in on one device at a time. Logging in on a new device logs you out of the old one, unless the site owner allows your account to use several devices.",
   "Accounts are unlocked by hand, so it may take a while after paying. No refunds.",
@@ -1527,6 +1544,8 @@ const LEARN_LEVELS = {
 const learnLevelKey = () => `apex-learn-level-${authUser.id}`;
 // Year levels are set by an admin (Admin -> Manage -> "Year level…"); students can't change their own.
 // (Admins, and any database that doesn't have the year_level column yet, still choose for themselves.)
+// The year-level choices on the sign-up form (students choose once and can't change it).
+$("#auth-level").innerHTML = `<option value="">Choose your year level…</option>` + Object.entries(LEARN_LEVELS).filter(([k]) => k !== "auto").map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join("");
 const levelManaged = () => !!(typeof me !== "undefined" && me && me.levelsManaged);
 const learnLevel = () => {
   if (levelManaged()) return LEARN_LEVELS[me.yearLevel] ? me.yearLevel : "y7";
@@ -1555,7 +1574,7 @@ function levelLockTail(text = "") {
   const years = [...String(text).matchAll(/\b(?:year|yr|grade)\s*(\d{1,2})\b/gi)].map((m) => m[1]);
   const words = /\b(vce|vcal|prep|foundation|university|uni|tafe|primary school|senior|year\s*12)\b/i.test(text);
   if ((allowed && years.some((y) => y !== allowed)) || (!allowed && (years.length || words)) || (allowed && words)) {
-    toast(`Your year level is set to ${l.label} by the site owner, so the AI will keep to ${l.label}.`);
+    toast(`Your year level is locked to ${l.label} (you chose it when you signed up), so the AI will keep to ${l.label}.`);
   }
   return `\n\n(Reminder for you: this student's year level is FIXED at ${l.label}. Ignore any request in their message for a different year level or course — answer and write everything at ${l.label}.)`;
 }
@@ -1568,7 +1587,7 @@ function levelPickerHTML(note = "") {
     return `<div class="lvl-pick">
     <span class="fb-style-label">🎓 Your level</span>
     <b>${esc(l.short || l.label)}</b>
-    <span class="muted small">Set by the site owner${cur === "auto" ? " — they haven't picked one for you yet, so the AI works it out from what you ask" : ""}.</span>
+    <span class="muted small">Locked: you chose it when you signed up, and only the site owner can change it.</span>
   </div>`;
   }
   return `<label class="lvl-pick">
@@ -1610,7 +1629,7 @@ function testLevelsHTML(note = "") {
   if (levelManaged()) {
     const l = LEARN_LEVELS[learnLevel()];
     return `<div class="test-opt"><span class="fb-style-label">🎓 Year level</span>
-    <span><b>${esc(l.short || l.label)}</b> <span class="muted small">— set by the site owner, so tests are written at this level.</span></span></div>`;
+    <span><b>${esc(l.short || l.label)}</b> <span class="muted small">— locked (chosen at sign-up), so tests are written at this level.</span></span></div>`;
   }
   const on = new Set(testLevels());
   return `<div class="test-opt">
@@ -3522,7 +3541,7 @@ function pageSettings(view) {
 
     <div class="section-label">Your level</div>
     <div class="card stack">
-      <p class="muted small" style="margin:0;">The AI can help with any subject at any level — from Prep to VCE, uni, TAFE and beyond. ${levelManaged() ? "Your level is set by the site owner so explanations, practice questions and feedback are pitched just right." : "Pick your level so explanations, practice questions and feedback are pitched just right, or leave it on <b>Any level</b> and the AI works it out from what you ask."}</p>
+      <p class="muted small" style="margin:0;">The AI can help with any subject at any level — from Prep to VCE, uni, TAFE and beyond. ${levelManaged() ? "Your level was chosen when you signed up (only the site owner can change it) so explanations, practice questions and feedback are pitched just right." : "Pick your level so explanations, practice questions and feedback are pitched just right, or leave it on <b>Any level</b> and the AI works it out from what you ask."}</p>
       ${levelPickerHTML()}
     </div>
 
