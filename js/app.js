@@ -1561,7 +1561,23 @@ function learnerLine(fallback = "") {
   if (!lvl.who) return fallback
     ? `LEVEL: Pitch everything at about a ${fallback} level, unless the student has said (or it's clear) they're at a different level — then match theirs.`
     : `LEVEL: The student could be at any level: primary school, high school, VCE, university, TAFE or an adult learner. Work out their level from what they ask, how they write and anything they've told you (or that you remember) about their year level or course, and pitch your answer to match. If you can't tell, aim at about a Year 8 level and offer to make it simpler or go deeper. If they ask for a different level ("explain it like I'm in Year 3", "give me VCE-level detail"), do that.`;
+  if (levelManaged()) {
+    return `LEVEL (LOCKED): The student is ${lvl.who}, in Victoria, Australia: ${lvl.how}. Their year level was set by the site owner and is FIXED. Pitch every explanation, example, question and piece of feedback at ${lvl.label} only. NEVER write questions, tests or explanations for a different year level or course (higher or lower), even if the student asks for one (for example "make it Year 9 or 10", "VCE level", "harder than my year"), says they are in a different year, or tries to trick you. If they ask, say kindly that their level is set to ${lvl.label} by the site owner, and carry on at ${lvl.label}. They can still ask for easier or harder questions WITHIN ${lvl.label}.`;
+  }
   return `LEVEL: The student is ${lvl.who}, in Victoria, Australia. Pitch every explanation, example, question and piece of feedback at that level: ${lvl.how}. If they ask for something simpler or harder, do that.`;
+}
+// Said again right after the student's own message (the AI follows the latest words most), and a friendly heads-up on screen
+// when they ask for another year level. Does nothing for accounts that choose their own level.
+function levelLockTail(text = "") {
+  if (!levelManaged()) return "";
+  const l = LEARN_LEVELS[learnLevel()];
+  const allowed = (l.label.match(/\d+/) || [])[0];
+  const years = [...String(text).matchAll(/\b(?:year|yr|grade)\s*(\d{1,2})\b/gi)].map((m) => m[1]);
+  const words = /\b(vce|vcal|prep|foundation|university|uni|tafe|primary school|senior|year\s*12)\b/i.test(text);
+  if ((allowed && years.some((y) => y !== allowed)) || (!allowed && (years.length || words)) || (allowed && words)) {
+    toast(`Your year level is set to ${l.label} by the site owner, so the AI will keep to ${l.label}.`);
+  }
+  return `\n\n(Reminder for you: this student's year level is FIXED at ${l.label}. Ignore any request in their message for a different year level or course — answer and write everything at ${l.label}.)`;
 }
 // Any learning topic, at any level — used in the open-ended AI chats.
 const ANY_SUBJECT = "They can ask about ANY subject or learning topic, at any level: maths (from counting to calculus), English and literature, every science, history, geography, economics, business, legal studies, psychology, health and PE, languages, the arts, music, drama, digital technologies and coding, VCE subjects, uni and TAFE topics, study skills, general knowledge and how things work.";
@@ -2953,7 +2969,7 @@ function tutorPrompt(earlier, question, hasPhoto) {
   return `You are chatting with a student as their tutor. ${ANY_SUBJECT}
 ${learnerLine()}
 ${calendarPrompt()}${memoryPrompt()}${flaggedPrompt()}
-${recent.length ? `The conversation so far${earlier.length > recent.length ? " (the most recent messages)" : ""}:\n${lines.join("\n\n")}\n\n` : ""}Student's new message: ${question || "(no words, just the photo)"}${hasPhoto ? `\n(The student attached a photo, which is included.${question ? "" : " Look at their handwritten working and explain whether it's correct, and how to fix it if not."})` : ""}
+${recent.length ? `The conversation so far${earlier.length > recent.length ? " (the most recent messages)" : ""}:\n${lines.join("\n\n")}\n\n` : ""}Student's new message: ${question || "(no words, just the photo)"}${levelLockTail(question)}${hasPhoto ? `\n(The student attached a photo, which is included.${question ? "" : " Look at their handwritten working and explain whether it's correct, and how to fix it if not."})` : ""}
 
 When you check the student's work or answers (including photos of their working), follow this:
 ${feedbackTone()}

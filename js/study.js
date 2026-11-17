@@ -175,11 +175,11 @@ What to do:
 - If they say "start again" or "clear the test", set "clear" to true.
 - If they're not sure, suggest a couple of ideas and ask ONE short question — don't add anything yet.
 - If they just chat or ask something, answer briefly.
-- Never give away the answers in your reply. Pitch questions at the year level(s) and difficulty above unless the student asks for something different in the chat.
+- Never give away the answers in your reply. Pitch questions at the year level(s) and difficulty above${levelManaged() ? " (the year level is locked and cannot be changed by the student)" : " unless the student asks for something different in the chat"}.
 
 ${AI_QUESTION_RULES}
 
-${history ? `Chat so far:\n${history}\n\n` : ""}Student: ${text}${hidden ? `\n\n(Extra information for you, from the student's info page:\n${hidden})` : ""}
+${history ? `Chat so far:\n${history}\n\n` : ""}Student: ${text}${levelLockTail(text)}${hidden ? `\n\n(Extra information for you, from the student's info page:\n${hidden})` : ""}
 
 Reply with ONLY valid JSON, no markdown:
 {"reply":"a short friendly message (under 60 words) saying what you did","add":[question objects],"remove":[question numbers],"clear":false,"remember":[],"forget":[]}
@@ -639,7 +639,7 @@ What to do:
 - If they ask a question or want help remembering a card, answer briefly (memory tricks are great).
 - Front: a short question, word or prompt (under 15 words). Back: a short, clear answer or definition (under 30 words). Every fact must be correct.
 
-${history ? `Chat so far:\n${history}\n\n` : ""}Student: ${text}${hidden ? `\n\n(Extra information for you, from the student's info page:\n${hidden})` : ""}
+${history ? `Chat so far:\n${history}\n\n` : ""}Student: ${text}${levelLockTail(text)}${hidden ? `\n\n(Extra information for you, from the student's info page:\n${hidden})` : ""}
 
 Reply with ONLY valid JSON, no markdown:
 {"reply":"a short friendly message (under 50 words)","newDeck":false,"name":"","add":[{"front":"...","back":"..."}],"remove":[card numbers],"remember":[],"forget":[]}
@@ -849,7 +849,7 @@ What to do:
 - Write clearly for the student's level (see LEVEL above) and make sure every fact is correct. A new page has 3–5 sections of 2–5 short points (under 25 words each), 3–6 key terms, 2–4 "did you know" facts and 3 multiple-choice quick-check questions.
 - For maths or science you can add a diagram to a section with "visual", e.g. {"type":"bars","labels":["A","B"],"values":[3,5],"title":"..."}, {"type":"plane","points":[{"x":2,"y":3,"label":"A"}]}, {"type":"numberline","min":0,"max":10,"step":1}, {"type":"fraction","parts":4,"shaded":3}, {"type":"triangle","angles":["60°","60°","60°"]}, {"type":"circle","r":5,"unit":"cm"}, {"type":"table","rows":[["Planet","Moons"],["Earth",1],["Mars",2]]}.
 
-${history ? `Chat so far:\n${history}\n\n` : ""}Student: ${text}
+${history ? `Chat so far:\n${history}\n\n` : ""}Student: ${text}${levelLockTail(text)}
 
 Reply with ONLY valid JSON, no markdown:
 {"reply":"a short message (under 50 words)","mode":"new","page":{"title":"...","intro":"1–2 sentences","sections":[{"heading":"...","points":["..."]}],"terms":[{"term":"...","meaning":"..."}],"facts":["..."],"quiz":[{"q":"...","options":["...","...","...","..."],"answer":"..."}]},"remember":[],"forget":[]}
