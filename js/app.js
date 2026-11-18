@@ -662,6 +662,7 @@ async function logout() {
   tutorChatId = null;
   forgetLocalAIState();
   forgetLocalCalendar();
+  if (typeof forgetDayPlan === "function") forgetDayPlan();
   calView.month = calView.day = null;
   aiTest.log.length = 0;
   aiTest.draft = [];
@@ -781,7 +782,7 @@ async function loadCustomQuestions() {
 function enterApp() {
   if (typeof startDeviceWatch === "function") startDeviceWatch();
   const parent = isParent();
-  const navItems = parent ? [{ route: "home", label: "Home", icon: "🏠" }, { route: "practice", label: "Topics", icon: "📚" }, { route: "progress", label: "Grades", icon: "📈" }] : NAV;
+  const navItems = parent ? [{ route: "home", label: "Home", icon: "🏠" }, { route: "practice", label: "Topics", icon: "📚" }, { route: "progress", label: "Grades", icon: "📈" }, { route: "schedule", label: "Schedule", icon: "🗓️" }] : NAV;
   const items = parent ? navItems : [...NAV, { route: "notes", label: "Notes & calendar", icon: "🗓️" }];
   $("#menu-notes").classList.toggle("hidden", parent);
   $("#nav").innerHTML = items.map((n) =>
@@ -839,7 +840,7 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-17d";
+const TERMS_VERSION = "2026-11-18a";
 const TERMS_CHANGES = [
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
@@ -847,6 +848,7 @@ const TERMS_CHANGES = [
   "New — AI memory: your AI tutor chats are saved to your account, and the AI can remember short notes about you (like topics you find tricky) to help you next time. You can see, delete or turn this off in Settings.",
   "New — public tests: you can share tests with everyone on JINtelligence. Shared tests show your name (unless you turn it off), must follow the behaviour rules, and can be removed by the site owner.",
   "New — plans: you choose a plan when you sign up (the prices are on the sign-up page and in Settings), paid cash in hand to the site owner. Prices can change for special deals and offers. Your plan shows in Settings.",
+  "New — day planner: plan your day hour by hour in Notes & calendar → Day planner. A parent or guardian you link with your parent code can see your day plan and your calendar (read-only). You can stop that any time with “New code” in Settings → Parent access.",
   "Small wording and spelling tidy-ups (nothing about what the Terms mean has changed).",
   "New — year level: students choose their year level when they sign up. After that it's locked, so the AI, tests and questions stay at that level; only the site owner can change it if it was a mistake.",
   "New — parent accounts: free to make, but view-only. A parent account can see the topics and a linked child's grades. It can't do practice questions, tests, games or use the AI tutor — those are for student accounts, and a parent account must not be given to a student to use.",
@@ -1063,7 +1065,7 @@ function route() {
   if (parentView && !PARENT_PAGES.includes(page)) { toast("Parent accounts can see topics and grades — that part is for students."); history.replaceState(null, "", "#/home"); page = "home"; }
   if (parentView && page === "practice") arg = undefined;
   const pages = { home: pageHome, practice: pagePractice, test: pageTest, games: pageGames, tutor: pageTutor, progress: pageProgress, notes: pageNotes, admin: pageAdmin, teacher: pageTeacher, assignment: pageAssignment, settings: pageSettings };
-  if (parentView) { pages.home = pageParentHome; pages.progress = pageParentProgress; }
+  if (parentView) { pages.home = pageParentHome; pages.progress = pageParentProgress; pages.schedule = pageParentSchedule; }
   const render = pages[page] || pageHome;
   const navRoute = pages[page] ? page : "home";
   $$("[data-route]").forEach((a) => a.classList.toggle("active", a.dataset.route === navRoute));
@@ -3596,7 +3598,7 @@ function pageSettings(view) {
 
     <div class="section-label">👨‍👩‍👧 Parent access</div>
     <div class="card stack">
-      <p class="muted small" style="margin:0;">Your parent or guardian can see your progress with your code below (read-only — they can't change anything or see your writing, notes or AI chats).</p>
+      <p class="muted small" style="margin:0;">Your parent or guardian can see your progress, calendar and day plan with your code below (read-only — they can't change anything or see your writing, notes or AI chats).</p>
       <div id="set-parent-code"><p class="muted small" style="margin:0;">Loading…</p></div>
       <hr style="border:none; border-top:1px solid var(--line); margin:4px 0;">
       <p class="muted small" style="margin:0;">Got a code from your child? Enter it here to see their progress.</p>

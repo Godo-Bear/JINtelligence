@@ -1516,3 +1516,36 @@ html.admin-only main { max-width: 1100px; margin: 0 auto; width: 100%; padding-b
 .plan-fields label.wide { grid-column: span 2; } .plan-fields label.check { display: flex; align-items: center; gap: 6px; align-self: end; padding-bottom: 8px; }
 .plan-fields input[type="checkbox"] { width: auto; }
 @media (max-width: 640px) { .plan-fields { grid-template-columns: 1fr 1fr; } .plan-fields label.wide { grid-column: span 2; } }
+
+/* Day planner (students) and the parent Schedule page. */
+.pl-wrap { display: grid; gap: 10px; max-width: 860px; }
+.pl-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.pl-dayname { display: grid; text-align: center; min-width: 190px; } .pl-dayname b { font-size: 18px; font-family: var(--font-display); }
+.pl-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 12px; }
+.pl-wk { display: grid; justify-items: center; gap: 1px; padding: 6px 2px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; color: var(--ink); font: inherit; }
+.pl-wk small { color: var(--muted); font-size: 11px; } .pl-wk b { font-size: 16px; }
+.pl-wk.sel { border-color: var(--accent); background: var(--accent-soft); } .pl-wk.today b { color: var(--accent); }
+.pl-wk-dot { width: 6px; height: 6px; border-radius: 50%; background: transparent; } .pl-wk-dot.on { background: var(--accent); }
+.pl-evrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.pl-evchip { font-size: 12.5px; padding: 3px 9px; border-radius: 20px; background: var(--surface-2); } .pl-evchip.done { text-decoration: line-through; opacity: .6; }
+.pl-summary-in { display: grid; gap: 2px; margin-bottom: 12px; }
+.pl-list { display: grid; gap: 8px; }
+.pl-row { display: grid; grid-template-columns: 82px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; background: var(--surface); }
+.pl-row.k-school { border-left-color: #5b7fd1; } .pl-row.k-activity { border-left-color: var(--warm); } .pl-row.k-break { border-left-color: #a7a7ad; }
+.pl-row.k-chores { border-left-color: #8d6e63; } .pl-row.k-free { border-left-color: var(--good); } .pl-row.k-other { border-left-color: var(--muted); }
+.pl-row.done { opacity: .62; } .pl-row.done .pl-title { text-decoration: line-through; }
+.pl-time { display: grid; } .pl-time b { font-size: 14px; } .pl-time small { color: var(--muted); font-size: 12px; }
+.pl-title { font-weight: 600; } .pl-details { font-size: 13.5px; margin-top: 3px; } .pl-warn { color: var(--warm); font-weight: 600; }
+.pl-actions { display: flex; align-items: center; gap: 4px; } .pl-check { display: flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; margin-right: 4px; } .pl-check input { width: auto; }
+.pl-empty { text-align: center; padding: 22px 8px; display: grid; gap: 10px; justify-items: center; } .pl-empty h3 { margin: 0; } .pl-empty p { margin: 0; max-width: 420px; }
+.pl-empty-ico { font-size: 34px; } .pl-quick { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; } .pl-quick small { opacity: .7; }
+.pl-form { display: grid; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line); }
+.pl-form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pl-note { margin: 0; }
+.ps-plan-count { font-size: 11px; font-weight: 600; color: var(--accent); }
+.ps-day .pl-row { grid-template-columns: 72px 1fr auto; padding: 8px 10px; gap: 8px; }
+.pc-today { margin-top: 14px; }
+@media (max-width: 640px) {
+  .pl-row { grid-template-columns: 66px 1fr; } .pl-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .pl-form-grid { grid-template-columns: 1fr 1fr; } .pl-dayname { min-width: 0; }
+}

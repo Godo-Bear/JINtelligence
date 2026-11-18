@@ -207,24 +207,28 @@ function wireNotesPanel(view, topic) {
 // ---------------------------------------------------------------- Notes & calendar page
 // #/notes/calendar or #/notes/notes opens that tab; otherwise the last one you used.
 function pageNotes(view, tab) {
-  const want = ["calendar", "notes"].includes(tab) ? tab : store("apex-notes-tab") === "notes" ? "notes" : "calendar";
+  const want = ["calendar", "planner", "notes"].includes(tab) ? tab : ["notes", "planner"].includes(store("apex-notes-tab")) ? store("apex-notes-tab") : "calendar";
   view.innerHTML = `
-    <div class="page-head"><h1>🗓️ Notes &amp; calendar</h1><p>Put your tests, assignments and reminders on the calendar to get reminders and help from the AI — and keep notes for every topic.</p></div>
+    <div class="page-head"><h1>🗓️ Notes &amp; calendar</h1><p>Put your tests and assignments on the calendar, plan your day hour by hour in the Day planner, and keep notes for every topic.</p></div>
     <div class="segmented" id="nt-tabs" role="tablist" style="margin-bottom:16px;">
       <button type="button" role="tab" data-tab="calendar">📅 Calendar</button>
+      <button type="button" role="tab" data-tab="planner">🕒 Day planner</button>
       <button type="button" role="tab" data-tab="notes">📝 Notes</button>
     </div>
     <div id="nt-calendar"></div>
+    <div id="nt-planner"></div>
     <div id="nt-notes" class="card">${notesEditorHTML("all")}</div>`;
   view.closest("main").classList.add("wide");
   const editor = wireNotesEditor(view, { mode: "all" });
-  let calendarReady = false;
+  let calendarReady = false, plannerReady = false;
   const open = (t) => {
     store("apex-notes-tab", t);
     $$("#nt-tabs button", view).forEach((b) => { const on = b.dataset.tab === t; b.classList.toggle("active", on); b.setAttribute("aria-selected", String(on)); });
     $("#nt-calendar", view).classList.toggle("hidden", t !== "calendar");
+    $("#nt-planner", view).classList.toggle("hidden", t !== "planner");
     $("#nt-notes", view).classList.toggle("hidden", t !== "notes");
     if (t === "calendar" && !calendarReady) { calendarReady = true; wireCalendar($("#nt-calendar", view)); }
+    if (t === "planner" && !plannerReady) { plannerReady = true; wirePlanner($("#nt-planner", view)); }
     if (t !== "notes") editor.flush();
   };
   $$("#nt-tabs button", view).forEach((b) => b.addEventListener("click", () => open(b.dataset.tab)));

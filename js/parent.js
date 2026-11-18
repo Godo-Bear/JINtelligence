@@ -79,7 +79,7 @@ function linkedChildrenHTML(children) {
 // so a parent can't hand their account to a child as a way round paying. (The AI tutor function also refuses
 // parent accounts on the server: see supabase/functions/ask-tutor.)
 const isParent = () => !!(typeof me !== "undefined" && me && me.accountType === "parent" && !me.isAdmin);
-const PARENT_PAGES = ["home", "practice", "progress", "settings"];
+const PARENT_PAGES = ["home", "practice", "progress", "schedule", "settings"];
 
 // ---- The parent's pages (Home and Grades) ----
 const pcTone = (pct) => (pct >= 75 ? "good" : pct >= 50 ? "mid" : "low");
@@ -123,6 +123,7 @@ function childCardHTML(c) {
       </div>
       <div class="pc-ring ${pcTone(t.accuracy)}" style="--p:${t.accuracy}" role="img" aria-label="${t.accuracy}% accuracy"><span>${t.accuracy}%</span></div>
     </div>
+    <div class="pc-today" data-today-for="${esc(c.id)}"></div>
     ${t.attempted ? `
     <div class="pc-sec-title">Progress by subject</div>
     ${subjectTilesHTML(subjectProgress(c.progress))}
@@ -231,6 +232,7 @@ function drawChildGrades(view) {
     const slot = $("#parent-connect", view);
     if (children.length) {
       el.innerHTML = childGradesHTML(children);
+      fillParentToday(view, children);
       if (slot) slot.innerHTML = `<details class="pc-more"><summary>🔗 Link another child</summary>${parentConnectHTML(false)}</details>`;
       const prev = $("#parent-preview", view); if (prev) prev.innerHTML = "";
       const hero = $("#parent-hero-sub", view);
@@ -284,4 +286,121 @@ function lockTopicsForParent(view) {
     d.querySelectorAll(".muted.small").forEach((x) => { if (!/Writing practice/.test(x.textContent)) x.remove(); });
     a.replaceWith(d);
   });
+}
+
+// ---------------- A child's calendar and day plan (read-only) ----------------
+// Parents can read these because of the "linked parent can read" policies in supabase/day-planner.sql.
+const parentSched = { childId: null, month: null, day: null };
+async function childSchedule(studentId, from, to) {
+  const out = { events: [], blocks: [], eventsOk: true, blocksOk: true };
+  try {
+    const r = await sb.from("calendar_events").select("*").eq("user_id", studentId).gte("date", from).lte("date", to);
+    if (r.error) out.eventsOk = false; else out.events = (r.data || []).map(fromCalRow);
+  } catch (e) { out.eventsOk = false; }
+  try {
+    const r = await sb.from("day_plans").select("*").eq("user_id", studentId).gte("date", from).lte("date", to);
+    if (r.error) out.blocksOk = false; else out.blocks = (r.data || []).map(fromBlockRow).sort(cmpBlocks);
+  } catch (e) { out.blocksOk = false; }
+  return out;
+}
+const parentEventHTML = (e) => `<div class="cal-event k-${e.kind}${e.done ? " done" : ""}">
+    <div class="cal-event-top"><span class="cal-kind">${CAL_KINDS[e.kind].icon} ${CAL_KINDS[e.kind].name}${e.subject ? ` · ${esc(e.subject)}` : ""}</span>${e.done ? `<span class="cal-when">✓ Done</span>` : ""}</div>
+    <div class="cal-event-title">${esc(e.title)}</div>${e.details ? `<div class="cal-event-details">${esc(e.details)}</div>` : ""}</div>`;
+
+// On the parent Home: a peek at each child's day.
+async function fillParentToday(view, children) {
+  const today = todayYmd();
+  await Promise.all(children.map(async (c) => {
+    const slot = view.querySelector(`[data-today-for="${c.id}"]`);
+    if (!slot) return;
+    const data = await childSchedule(c.id, today, today);
+    if (!view.contains(slot)) return;
+    const blocks = data.blocks, evs = data.events;
+    slot.innerHTML = `<div class="pc-sec-title">Today · ${esc(fmtDay(today, true))}</div>
+      ${evs.length ? `<div class="pl-evrow">${evs.map((e) => `<span class="pl-evchip k-${e.kind}${e.done ? " done" : ""}">${CAL_KINDS[e.kind].icon} ${esc(e.title)}</span>`).join("")}</div>` : ""}
+      ${blocks.length ? `${planSummaryHTML(blocks)}${planRowsHTML(blocks.slice(0, 4), { readOnly: true })}${blocks.length > 4 ? `<p class="muted small" style="margin:6px 0 0;">+${blocks.length - 4} more</p>` : ""}`
+        : `<p class="muted small" style="margin:0;">${data.blocksOk ? "Nothing planned for today." : "Their day plan isn't available yet."}</p>`}
+      <a class="btn secondary sm" href="#/schedule" style="margin-top:10px;">🗓️ See the full schedule →</a>`;
+  }));
+}
+
+async function pageParentSchedule(view) {
+  view.innerHTML = `
+    <div class="page-head"><h1>🗓️ Schedule</h1><p>Your child's calendar and day plan. You can look but not change anything.</p></div>
+    <div id="ps-kids"></div>
+    <div id="ps-body"><p class="muted">Loading…</p></div>`;
+  view.closest("main").classList.add("wide");
+  const children = await myChildren();
+  if (!view.isConnected) return;
+  const body = $("#ps-body", view);
+  if (!children.length) {
+    body.innerHTML = `<div class="banner info" style="margin-bottom:12px;">Link to your child's account to see their schedule.</div><div id="parent-connect">${parentConnectHTML(true)}</div>`;
+    wireParentLink(view, () => pageParentSchedule(view));
+    return;
+  }
+  parentSched.childId = children.find((c) => c.id === parentSched.childId)?.id || children[0].id;
+  parentSched.day ||= todayYmd();
+  parentSched.month ||= parentSched.day.slice(0, 7);
+  $("#ps-kids", view).innerHTML = children.length > 1
+    ? `<div class="segmented" role="tablist" style="margin-bottom:14px;">${children.map((c) => `<button type="button" role="tab" data-child="${esc(c.id)}" class="${c.id === parentSched.childId ? "active" : ""}">${esc(c.username || "Child")}</button>`).join("")}</div>` : "";
+  $("#ps-kids", view).addEventListener("click", (e) => { const b = e.target.closest("[data-child]"); if (b) { parentSched.childId = b.dataset.child; pageParentSchedule(view); } });
+
+  const child = children.find((c) => c.id === parentSched.childId);
+  async function draw() {
+    if (!view.isConnected) return;
+    const [y, m] = parentSched.month.split("-").map(Number);
+    const first = new Date(y, m - 1, 1), lead = (first.getDay() + 6) % 7, days = new Date(y, m, 0).getDate(), weeks = Math.ceil((lead + days) / 7);
+    const gridStart = new Date(y, m - 1, 1 - lead), gridEnd = new Date(y, m - 1, 1 - lead + weeks * 7 - 1);
+    const today = todayYmd(), soonEnd = ymd(new Date(Date.now() + 30 * 86400000));
+    const from = [ymd(gridStart), today].sort()[0], to = [ymd(gridEnd), soonEnd].sort().reverse()[0];
+    const data = await childSchedule(child.id, from, to);
+    if (!view.isConnected) return;
+    const evByDay = {}, blByDay = {};
+    data.events.forEach((e) => (evByDay[e.date] ||= []).push(e));
+    data.blocks.forEach((b) => (blByDay[b.date] ||= []).push(b));
+    let grid = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => `<div class="cal-dow">${d}</div>`).join("");
+    for (let i = 0; i < weeks * 7; i++) {
+      const d = new Date(y, m - 1, 1 - lead + i), key = ymd(d), evs = evByDay[key] || [], bl = blByDay[key] || [];
+      const cls = ["cal-day", d.getMonth() !== m - 1 && "out", key === today && "today", key === parentSched.day && "sel", key < today && "past", (d.getDay() === 0 || d.getDay() === 6) && "wkend"].filter(Boolean).join(" ");
+      grid += `<button type="button" class="${cls}" data-date="${key}" aria-label="${fmtDay(key, true)}${evs.length ? `, ${evs.length} on the calendar` : ""}${bl.length ? `, ${bl.length} planned` : ""}">
+        <span class="cal-num">${d.getDate()}</span>
+        ${evs.length ? `<span class="cal-chips">${evs.slice(0, 2).map((e) => `<span class="cal-chip k-${e.kind}${e.done ? " done" : ""}">${esc(e.title)}</span>`).join("")}${evs.length > 2 ? `<span class="cal-more">+${evs.length - 2}</span>` : ""}</span>` : ""}
+        ${bl.length ? `<span class="ps-plan-count" title="Day plan">🕒 ${bl.length}</span>` : ""}
+      </button>`;
+    }
+    const dayEvs = evByDay[parentSched.day] || [], dayBlocks = blByDay[parentSched.day] || [];
+    const soon = data.events.filter((e) => !e.done && e.date >= today && e.date <= soonEnd).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
+    $("#ps-body", view).innerHTML = `
+      <div class="cal-wrap">
+        <div class="card cal-card">
+          <div class="cal-head"><div class="cal-nav">
+            <button type="button" class="btn ghost" data-shift="-1" aria-label="Previous month">‹</button>
+            <h2 class="cal-month">${first.toLocaleDateString("en-AU", { month: "long", year: "numeric" })}</h2>
+            <button type="button" class="btn ghost" data-shift="1" aria-label="Next month">›</button></div>
+            <button type="button" class="btn secondary sm" data-today>Today</button></div>
+          <div class="cal-grid">${grid}</div>
+          <div class="cal-legend">${Object.entries(CAL_KINDS).map(([k, v]) => `<span><i class="cal-dot k-${k}"></i>${v.name}</span>`).join("")}<span>🕒 Day plan</span></div>
+        </div>
+        <div class="cal-side">
+          <div class="card ps-day">
+            <div class="cal-dayname">${esc(fmtDay(parentSched.day, true))}</div><div class="muted small" style="margin-bottom:10px;">${esc(whenText(parentSched.day))}</div>
+            <h3 class="cal-side-h">📅 Calendar</h3>
+            ${dayEvs.length ? `<div class="cal-events">${dayEvs.map(parentEventHTML).join("")}</div>` : `<p class="muted small" style="margin:0 0 8px;">${data.eventsOk ? "Nothing on the calendar." : "Their calendar isn't available yet."}</p>`}
+            <h3 class="cal-side-h" style="margin-top:14px;">🕒 Day plan</h3>
+            ${dayBlocks.length ? `${planSummaryHTML(dayBlocks)}${planRowsHTML(dayBlocks, { readOnly: true })}` : `<p class="muted small" style="margin:0;">${data.blocksOk ? "No plan for this day." : "Their day plan isn't available yet."}</p>`}
+          </div>
+          <div class="card cal-soon"><h3 class="cal-side-h">⏰ Coming up</h3>
+            ${soon.length ? `<div class="cal-rows">${soon.map((e) => `<button type="button" class="cal-row k-${e.kind}" data-go="${e.date}"><span class="cal-date"><b>${fromYmd(e.date).getDate()}</b><small>${fromYmd(e.date).toLocaleDateString("en-AU", { month: "short" })}</small></span><span class="cal-row-main"><span class="cal-row-title">${CAL_KINDS[e.kind].icon} ${esc(e.title)}</span><span class="muted small">${CAL_KINDS[e.kind].name}${e.subject ? ` · ${esc(e.subject)}` : ""}</span></span><span class="cal-when${daysUntil(e.date) <= 2 ? " soon" : ""}">${esc(whenText(e.date))}</span></button>`).join("")}</div>` : `<p class="muted small" style="margin:0;">Nothing in the next 30 days.</p>`}
+          </div>
+          <p class="muted small">Only what ${esc(child.username || "your child")} adds to their own calendar and day plan shows here.</p>
+        </div>
+      </div>`;
+  }
+  body.addEventListener("click", (e) => {
+    const cell = e.target.closest("[data-date]"), go = e.target.closest("[data-go]"), sh = e.target.closest("[data-shift]"), td = e.target.closest("[data-today]");
+    if (cell || go) { parentSched.day = (cell || go).dataset.date || (cell || go).dataset.go; parentSched.month = parentSched.day.slice(0, 7); draw(); }
+    else if (sh) { const [yy, mm] = parentSched.month.split("-").map(Number); parentSched.month = ymd(new Date(yy, mm - 1 + +sh.dataset.shift, 1)).slice(0, 7); draw(); }
+    else if (td) { parentSched.day = todayYmd(); parentSched.month = parentSched.day.slice(0, 7); draw(); }
+  });
+  draw();
 }
