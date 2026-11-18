@@ -1,79 +1,36 @@
-YOUTUBE UPLOAD DETAILS FOR JINtelligence
-=========================================
-Files: the two videos are JINtelligence-parents.mp4 and JINtelligence-students.mp4 (1280x720, 30 fps, H.264 + AAC, ready for YouTube).
-Each has a matching thumbnail (.png, 1280x720) and captions file (.srt) in this folder.
+YOUTUBE UPLOAD DETAILS FOR JINtelligence (real screen walkthroughs)
+===================================================================
+Files in this folder:
+  JINtelligence-for-students.mp4  (about 1 min 49 s)   thumbnail: JINtelligence-students-thumbnail.png
+  JINtelligence-for-parents.mp4   (about 1 min 6 s)    thumbnail: JINtelligence-parents-thumbnail.png
+Both are 1280x720, 30 fps, H.264 + AAC. They have on-screen captions and soft background music (no voice).
+The demo account is called "Jordan"; the child in the parents video is "Sam" (sample data).
 
 
 -----------------------------------------
-VIDEO 1: PARENTS AND TEACHERS
------------------------------------------
-TITLE:
-JINtelligence for Parents & Teachers | Study Smarter, Score Higher
-
-DESCRIPTION:
-JINtelligence is a study website for students, with topics based on the Oxford textbook and the Victorian Curriculum, tests on any subject, and an AI tutor that can help with anything.
-
-In this video:
-0:00 Welcome and topics
-0:18 Tests on any subject
-0:28 AI tutor and parent accounts
-0:46 Teachers and the calendar
-0:58 Prices
-
-What you get:
-- Practice sets that start easy and get harder as your child improves
-- Tests on any subject: choose a subject and difficulty, or upload class notes
-- An AI tutor that helps with any subject, at your child's year level
-- Free parent accounts to see your child's scores, test results and weak spots
-- Teacher tools: classes and assignments
-- A notes and calendar page to plan homework, tests and study
-
-Prices: $7 for 1 month or $15 for 4 months, paid in cash. Prices can change for special deals and offers.
-
-Try it: https://jintelligence.jn-studios.workers.dev
-
-Results vary. JINtelligence can help students practice, but it does not guarantee better marks.
-
-Made by Jayden Narayan. © 2026 Jayden Narayan. All rights reserved.
-
-#study #education #VictorianCurriculum #Australia #parents #teachers
-
-TAGS (paste into the Tags box, separated by commas):
-JINtelligence, study website, Victorian Curriculum, Year 7 maths, Australian students, AI tutor, online tutoring, homework help, practice questions, tests, parents, teachers, education, study tips, Oxford textbook
-
-SETTINGS:
-- Audience: No, it's not made for kids (this one is for parents and teachers)
-- Category: Education
-- Video language: English (Australia)
-- Thumbnail: JINtelligence-parents-thumbnail.png
-- Subtitles: upload JINtelligence-parents.srt (English)
-
-
------------------------------------------
-VIDEO 2: STUDENTS
+VIDEO 1: STUDENTS
 -----------------------------------------
 TITLE:
-JINtelligence for Students | Games, AI Tutor & Tests on Any Subject
+JINtelligence for Students | AI Tutor, Games & Day Planner
 
 DESCRIPTION:
-Learning that feels like playing! JINtelligence has an AI tutor you can talk to, tests on any subject, and games with boss battles.
+A quick tour of JINtelligence, the study site that makes learning feel like playing.
 
 In this video:
-0:00 Meet your AI tutor
-0:20 Upload files and make tests
-0:39 Games
-0:50 Practice and progress
-1:06 Prices
+0:00 Meet JINtelligence
+0:18 Practice topics from Year 7 to VCE
+0:38 The AI tutor
+0:52 Games and boss battles
+1:11 The day planner
+1:37 Track your progress
 
-- Ask the AI tutor anything, with voice chat
-- Upload a file or a photo to get help with homework
-- Turn your class notes into a test, and choose the difficulty
-- Play boss battles, the Millionaire ladder, Survival and more
-- Earn XP, rank up and track every test
+- Practice sets that start easy and get harder, with instant feedback and explanations
+- An AI tutor you can ask anything, on any subject (with voice chat)
+- Games: boss battles, the Millionaire ladder, survival mode and more
+- A day planner to schedule your study time, which your parents can see
+- Points, XP and ranks to show your progress
 
-Prices: $7 for 1 month or $15 for 4 months, paid in cash. Ask your parents to check it out. Prices can change for special deals and offers.
-
-Try it: https://jintelligence.jn-studios.workers.dev
+Ask your parents to check it out. Prices can change for special deals and offers, so check the sign-up page.
 
 Results vary. JINtelligence can help you practice, but it does not guarantee better marks.
 
@@ -82,11 +39,48 @@ Made by Jayden Narayan. © 2026 Jayden Narayan. All rights reserved.
 #study #students #games #VictorianCurriculum #Australia
 
 TAGS (paste into the Tags box, separated by commas):
-JINtelligence, study games, AI tutor, Year 7 maths, Victorian Curriculum, homework help, school, study tips, learning games, Australian students, practice questions, boss battle, Millionaire game
+JINtelligence, study games, AI tutor, Year 7 maths, Victorian Curriculum, homework help, study planner, day planner, school, study tips, learning games, Australian students, practice questions
 
 SETTINGS:
 - Audience: this video is aimed at school students, many of them under 13, so YouTube will most likely need you to answer "Yes, it's made for kids". You have to answer honestly. Made-for-kids videos have comments switched off.
 - Category: Education
 - Video language: English (Australia)
 - Thumbnail: JINtelligence-students-thumbnail.png
-- Subtitles: upload JINtelligence-students.srt (English)
+
+
+-----------------------------------------
+VIDEO 2: PARENTS
+-----------------------------------------
+TITLE:
+JINtelligence for Parents | Free Parent Account to See Grades & Schedule
+
+DESCRIPTION:
+How parents can follow their child's progress on JINtelligence, a study website with topics from the Victorian Curriculum, an AI tutor, games and a day planner.
+
+In this video:
+0:00 Free parent accounts and connecting
+0:24 Your child's grades and topics
+0:46 Their calendar and day plan
+
+- Parent accounts are free and view-only: you can look, but not change anything
+- Connect with the code from your child's account (Settings > Parent access)
+- See progress by subject, what they're doing well and where they could use help
+- Browse every topic they can learn
+- See their calendar and day plan, including tests and assignments coming up
+
+Your child needs their own student account first. Student plans are paid in cash, and prices can change for special deals and offers.
+
+Results vary. JINtelligence can help students practice, but it does not guarantee better marks.
+
+Made by Jayden Narayan. © 2026 Jayden Narayan. All rights reserved.
+
+#study #education #VictorianCurriculum #Australia #parents
+
+TAGS (paste into the Tags box, separated by commas):
+JINtelligence, parent account, see my child's grades, study website, Victorian Curriculum, Year 7, Australian students, homework help, study planner, parents, education
+
+SETTINGS:
+- Audience: No, it's not made for kids (this one is for parents)
+- Category: Education
+- Video language: English (Australia)
+- Thumbnail: JINtelligence-parents-thumbnail.png

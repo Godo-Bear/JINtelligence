@@ -1,0 +1,51 @@
+OPTIONAL VOICEOVER SCRIPTS (for ElevenLabs)
+==========================================
+The videos work as they are (on-screen captions + music). If you want a voice, paste one whole script into ElevenLabs with a blank
+line between paragraphs, generate it as ONE clip, and give me the audio. I'll cut it at the pauses and line it up with the screen.
+Each paragraph below says how long its part of the video is, so keep it about that long.
+
+-----------------------------------------
+STUDENTS (1 min 49 s)
+-----------------------------------------
+(0:00 - 0:11, about 10 sec)
+Hey, I'm Jayden, and this is JINtelligence. Learning that feels like playing. Let me show you around.
+
+(0:11 - 0:18, about 7 sec)
+Here's your home page, with your points, your accuracy, your rank, and what to practice next.
+
+(0:18 - 0:38, about 18 sec)
+Practice has topics from Year 7 all the way up to VCE. Every set starts easy and gets harder, and you get instant feedback, with an explanation whenever you're stuck.
+
+(0:38 - 0:52, about 11 sec)
+Ask the AI tutor anything, on any subject. It explains things step by step, and you can even talk to it with voice chat.
+
+(0:52 - 1:11, about 17 sec)
+Then have some fun with games. Battle a boss with your brain. Right answers hit the boss, and wrong answers hit you. There's the Millionaire ladder, survival mode, and you can even challenge your friends.
+
+(1:11 - 1:37, about 24 sec)
+Use the day planner to schedule your study time. Add what's happening and when, so it's easy to fit in homework, practice and free time. Tick things off as you go, and your parents can see your plan too.
+
+(1:37 - 1:43, about 5 sec)
+And watch your scores, XP and rank climb.
+
+(1:43 - 1:49, about 5 sec)
+JINtelligence. Learn, play, improve.
+
+
+-----------------------------------------
+PARENTS (1 min 6 s)
+-----------------------------------------
+(0:00 - 0:09, about 8 sec)
+Hi, I'm Jayden, and this is JINtelligence. Here's how it works for parents.
+
+(0:09 - 0:24, about 14 sec)
+Parent accounts are free and view-only. Just connect with the code from your child's account, in Settings, under Parent access.
+
+(0:24 - 0:46, about 20 sec)
+Now you can see your child's grades: their progress in every subject, what they're doing well, and where they could use some help. You can also browse every topic they can learn.
+
+(0:46 - 0:59, about 12 sec)
+The schedule shows their calendar and day plan, including tests and assignments coming up, so you can help them prepare. And it's all read-only. You can look, but you can't change anything.
+
+(0:59 - 1:06, about 6 sec)
+JINtelligence. Follow your child's progress, for free.
