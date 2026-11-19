@@ -1,8 +1,9 @@
 YOUTUBE UPLOAD DETAILS FOR JINtelligence (real screen walkthroughs)
 ===================================================================
 Files in this folder:
-  JINtelligence-for-students.mp4  (about 1 min 49 s)   thumbnail: JINtelligence-students-thumbnail.png
-  JINtelligence-for-parents.mp4   (about 1 min 6 s)    thumbnail: JINtelligence-parents-thumbnail.png
+  JINtelligence-for-students.mp4  (about 1 min 49 s)   thumbnail: JINtelligence-for-students-thumbnail.png
+  JINtelligence-for-parents.mp4   (about 1 min 6 s)    thumbnail: JINtelligence-for-parents-thumbnail.png
+(The older voiceover videos in the main folder use JINtelligence-students-thumbnail.png and JINtelligence-parents-thumbnail.png.)
 Both are 1280x720, 30 fps, H.264 + AAC. They have on-screen captions and soft background music (no voice).
 The demo account is called "Jordan"; the child in the parents video is "Sam" (sample data).
 
@@ -45,7 +46,7 @@ SETTINGS:
 - Audience: this video is aimed at school students, many of them under 13, so YouTube will most likely need you to answer "Yes, it's made for kids". You have to answer honestly. Made-for-kids videos have comments switched off.
 - Category: Education
 - Video language: English (Australia)
-- Thumbnail: JINtelligence-students-thumbnail.png
+- Thumbnail: JINtelligence-for-students-thumbnail.png
 
 
 -----------------------------------------
@@ -83,4 +84,4 @@ SETTINGS:
 - Audience: No, it's not made for kids (this one is for parents)
 - Category: Education
 - Video language: English (Australia)
-- Thumbnail: JINtelligence-parents-thumbnail.png
+- Thumbnail: JINtelligence-for-parents-thumbnail.png
