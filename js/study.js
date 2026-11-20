@@ -148,9 +148,15 @@ function aiTestMode(view, host) {
   wireUploadBox($("#tc-files", host), aiTest.files);
   $("#tc-types", host).addEventListener("change", () => { aiTest.types = $$("#tc-types input:checked", host).map((b) => b.value); saveAITest(); });
 
-  const summary = () => (aiTest.draft.length
-    ? `The test so far has ${aiTest.draft.length} questions:\n${aiTest.draft.map((q, i) => `${i + 1}. [${questionKind(q)}] ${q.prompt.slice(0, 140)} (${q.topicName})`).join("\n")}`
-    : "The test is empty so far.");
+  // There's no limit on how many questions a test can have. The AI is shown the list so it can avoid repeats and remove
+  // by number; for a very long test the lines get shorter (and the oldest ones are left out) so the message stays small.
+  const summary = () => {
+    const n = aiTest.draft.length;
+    if (!n) return "The test is empty so far.";
+    const len = Math.max(40, Math.min(140, Math.floor(16000 / n) - 25)), start = n > 250 ? n - 250 : 0;
+    const lines = aiTest.draft.slice(start).map((q, i) => `${start + i + 1}. [${questionKind(q)}] ${q.prompt.slice(0, len)} (${q.topicName})`);
+    return `The test so far has ${n} questions:\n${start ? `(Questions 1 to ${start} are earlier ones, not listed here. Don't repeat them.)\n` : ""}${lines.join("\n")}`;
+  };
 
   const chat = chatPanel($("#tc-chat", host), {
     log: aiTest.log,
@@ -170,7 +176,7 @@ ${calendarPrompt()}${memoryPrompt()}${flaggedPrompt("test")}
 ${summary()}
 ${types.length ? `The student ticked these question types: ${types.join(", ")}. Use them.\n` : ""}
 What to do:
-- When the student asks for questions or says what they want to be tested on, WRITE the questions and add them ("add"). If they don't say how many, write 10 for a new test, or 5 when adding more (never more than 15 at once).
+- When the student asks for questions or says what they want to be tested on, WRITE the questions and add them ("add"). If they don't say how many, write 10 for a new test, or 5 when adding more (never more than 30 at once; if they ask for more than that, write 30 and tell them to ask for more).
 - To change a question, remove it by its number ("remove") and add the new version.
 - If they say "start again" or "clear the test", set "clear" to true.
 - If they're not sure, suggest a couple of ideas and ask ONE short question — don't add anything yet.
@@ -199,7 +205,7 @@ ${memoryRules()}`, aiTest.files,
       }
       const removed = before - aiTest.draft.length;
       const list = Array.isArray(data) ? data : obj.add || obj.questions || [];
-      const added = normaliseAIQuestions(list, 15).slice(0, Math.max(0, 50 - aiTest.draft.length));
+      const added = normaliseAIQuestions(list, 30);
       aiTest.draft.push(...added);
       const note = [added.length ? `✓ Added ${added.length} question${added.length === 1 ? "" : "s"}` : "", removed ? `Removed ${removed}` : "", memoryNote(applyMemoryUpdates(obj))].filter(Boolean).join(" · ");
       const reply = aiReplyText(raw, data);
