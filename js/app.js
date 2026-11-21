@@ -391,6 +391,28 @@ async function askTutorRaw(body, { onRetry } = {}) {
   }
   throw failure;
 }
+// ---- Saved answers (supabase/ai-answer-cache.sql): a general first question, asked at the same level and language, reuses an
+// earlier answer instead of using the AI again. Only plain first questions are saved (no photo, files, voice or personal words),
+// and they are answered without the student's memory or calendar, so nothing personal is ever shared.
+const AI_CACHE_DAYS = 30;
+const hashStr = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); };
+function tutorCacheKey(question) {
+  const q = String(question || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  if (q.length < 8 || q.length > 160 || /\b(my|mine|me|our|ours|myself|i'm|i've|today|tomorrow|yesterday|tonight)\b/.test(q)) return null;
+  return `${q}|${hashStr(learnerLine())}`;
+}
+async function cachedTutorAnswer(key) {
+  if (!key) return null;
+  try {
+    const { data } = await sb.from("ai_answer_cache").select("answer, created_at").eq("key", key).maybeSingle();
+    if (data?.answer && Date.now() - new Date(data.created_at).getTime() < AI_CACHE_DAYS * 864e5) return data.answer;
+  } catch (e) { /* the cache is optional */ }
+  return null;
+}
+async function saveTutorAnswer(key, answer) {
+  if (!key || !answer || answer.length > 5500) return;
+  try { await sb.from("ai_answer_cache").upsert({ key, answer }, { onConflict: "key", ignoreDuplicates: true }); } catch (e) { /* optional */ }
+}
 async function askTutor(body, opts) {
   return cleanTutorAnswer(await askTutorRaw(body, opts));
 }
@@ -3177,12 +3199,12 @@ let tutorVoice = false; // voice chat is on: replies are short and spoken
 const tutorFiles = []; // files given to the tutor (js/uploads.js) — kept while you're on the site, used in every message
 const TUTOR_HISTORY = 12; // earlier messages sent with each question
 
-function tutorPrompt(earlier, question, hasPhoto) {
+function tutorPrompt(earlier, question, hasPhoto, neutral = false) {
   const recent = earlier.slice(-TUTOR_HISTORY);
   const lines = recent.map((m) => `${m.role === "me" ? "Student" : "Tutor"}: ${m.photo ? "[sent a photo] " : ""}${String(m.text).slice(0, 1500)}`);
   return `You are chatting with a student as their tutor. ${ANY_SUBJECT}
 ${learnerLine()}
-${calendarPrompt()}${memoryPrompt()}${flaggedPrompt()}
+${neutral ? "" : calendarPrompt() + memoryPrompt() + flaggedPrompt()}
 ${recent.length ? `The conversation so far${earlier.length > recent.length ? " (the most recent messages)" : ""}:\n${lines.join("\n\n")}\n\n` : ""}Student's new message: ${question || "(no words, just the photo)"}${levelLockTail(question)}${hasPhoto ? `\n(The student attached a photo, which is included.${question ? "" : " Look at their handwritten working and explain whether it's correct, and how to fix it if not."})` : ""}
 
 When you check the student's work or answers (including photos of their working), follow this:
@@ -3407,7 +3429,9 @@ function pageTutor(view) {
     const files = uploadsReady(tutorFiles);
     if (!current || busy || (!question && !pendingImage && !files.length)) return;
     if (tutorFiles.some((f) => f.status === "reading")) return toast("Your files are still loading — wait a moment, then send again.");
-    if (!(await checkAiLimit("tutor"))) return;
+    const cacheKey = question && !pendingImage && !files.length && !tutorVoice && !current.messages.some((m) => !m.pending && m.role !== "err") ? tutorCacheKey(question) : null;
+    const saved = await cachedTutorAnswer(cacheKey); // a saved answer costs nothing, so it doesn't count against the daily limit
+    if (!saved && !(await checkAiLimit("tutor"))) return;
     const image = pendingImage, chat = current; // the student may switch chats while the tutor is thinking
     const earlier = chat.messages.filter((m) => !m.pending && m.role !== "err");
     chat.messages.push({ role: "me", text: question || (image ? "Can you check my working?" : "Can you look at my files?"), image: image?.base64, photo: !!image, ...(files.length ? { files: files.map((f) => f.name) } : {}) });
@@ -3422,8 +3446,13 @@ function pageTutor(view) {
     const slow = setTimeout(() => say("Still working on it…"), 15000);
 
     try {
+      if (saved) {
+        pending.text = cleanTutorAnswer(saved);
+        if (chat.title === "New chat") chat.title = question.slice(0, 50);
+        throw Object.assign(new Error("saved"), { fromCache: true });
+      }
       await Promise.all([loadMemory(), ensureCalendar()]);
-      const prompt = tutorPrompt(earlier, question || (image ? "" : "Have a look at my files and tell me what they're about, then ask what I'd like help with."), !!image);
+      const prompt = tutorPrompt(earlier, question || (image ? "" : "Have a look at my files and tell me what they're about, then ask what I'd like help with."), !!image, !!cacheKey);
       const body = files.length ? await withUploads(prompt, tutorFiles, "The student has given you these files to help with. Use them to answer — e.g. explain a question from a worksheet, quiz them on their notes, or check their work.") : { question: prompt };
       // A photo of working takes priority over pictures in the files (one image can go with each message).
       if (image) { body.image = image.base64; body.imageMimeType = image.mimeType; }
@@ -3435,10 +3464,13 @@ function pageTutor(view) {
       if (chat.title === "New chat") chat.title = plainText(obj.title || "").slice(0, 50) || (question || "Checking my working").slice(0, 50);
       const note = [memoryNote(applyMemoryUpdates(obj)), calendarNote(addEventsFromAI(obj.calendar))].filter(Boolean).join(" · ");
       if (note) pending.note = note;
+      if (cacheKey && pending.text && !/couldn't come up with/i.test(pending.text)) saveTutorAnswer(cacheKey, pending.text);
     } catch (err) {
+      if (err.fromCache) { /* answered from a saved answer */ } else {
       console.error(err);
       pending.role = "err";
       pending.text = err.userMessage || "Something went wrong reading the tutor's answer. Please try again.";
+      }
     }
     clearTimeout(slow);
     delete pending.pending;
