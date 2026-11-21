@@ -1527,7 +1527,7 @@ async function saveWriting(piece) {
   if (!cloudWritings) return;
   const { error } = await sb.from("writings").upsert({
     id: piece.id, user_id: authUser.id, topic_id: piece.topicId, prompt: piece.prompt,
-    text: piece.text, parts: piece.parts || null, settings: { ...piece.settings, evidence: piece.evidence || null, plan: piece.plan || null, stage: piece.stage || null, chat: (piece.chat || []).filter((m) => m.role !== "err").slice(-40) }, feedback: piece.feedback || null,
+    text: piece.text, parts: piece.parts || null, settings: { ...piece.settings, evidence: piece.evidence || null, plan: piece.plan || null, stage: piece.stage || null, chat: (piece.chat || []).filter((m) => m.role !== "err").slice(-40), lookFor: piece.lookFor || null, refFiles: piece.refFiles || null }, feedback: piece.feedback || null,
     word_count: countWords(piece.text), created_at: piece.createdAt, updated_at: piece.updatedAt,
   });
   if (error) { cloudWritings = false; console.warn("Apex: writings table unavailable, saving on this device only —", error.message); }
@@ -1543,7 +1543,7 @@ async function listWritings(topicId) {
       if (local && local.updatedAt >= r.updated_at) return;
       byId.set(r.id, {
         id: r.id, topicId: r.topic_id, prompt: r.prompt, text: r.text, parts: r.parts || undefined,
-        settings: r.settings || {}, evidence: r.settings?.evidence || undefined, plan: r.settings?.plan || undefined, stage: r.settings?.stage || undefined, chat: r.settings?.chat || undefined,
+        settings: r.settings || {}, evidence: r.settings?.evidence || undefined, plan: r.settings?.plan || undefined, stage: r.settings?.stage || undefined, chat: r.settings?.chat || undefined, lookFor: r.settings?.lookFor || "", refFiles: r.settings?.refFiles || undefined,
         feedback: r.feedback || "", createdAt: r.created_at, updatedAt: r.updated_at,
       });
     });
@@ -1740,6 +1740,11 @@ document.addEventListener("change", (e) => {
   }
 });
 
+// "What should the AI look for?": the student's own notes on what to check, added to the feedback and the chat.
+function lookForBlock(piece) {
+  const t = String(piece.lookFor || "").trim();
+  return t ? `\nThe student asked you to look out for these things in particular. Make sure your feedback covers them as well as the points above, and say how well the writing does on each:\n"""\n${t}\n"""\n` : "";
+}
 function writingFeedbackPrompt(t, piece) {
   const s = piece.settings || {};
   const text = writingText(piece);
@@ -1763,7 +1768,7 @@ Give feedback a teacher would give on a creative writing piece, covering:
 6. One clear, specific suggestion for how to improve the piece overall.
 
 Keep it specific and easy for the student to understand. Use short paragraphs or a simple list, not markdown formatting.
-${learnerLine("Year 7")}
+${lookForBlock(piece)}${learnerLine("Year 7")}
 
 ${feedbackTone()}`;
   }
@@ -1788,7 +1793,7 @@ Give feedback a teacher would give on an essay, covering:
 8. One clear, specific suggestion for how to improve the essay overall.
 
 Keep it specific and easy for the student to understand. Use short paragraphs or a simple list, not markdown formatting.
-${learnerLine("Year 7")}
+${lookForBlock(piece)}${learnerLine("Year 7")}
 
 ${feedbackTone()}`;
 }
@@ -2043,6 +2048,7 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
   function open(piece, { isNew = false } = {}) {
     setTab("new");
     leaveStage();
+    if (refFor !== piece.id) loadRefFiles(piece);
     (piece.stage === "plan" ? planStage : writeStage)(piece, { isNew });
   }
 
@@ -2142,6 +2148,66 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
     open(piece);
   }));
 
+  // ----- Files and notes for the AI (shown while planning and while writing) -----
+  let refFiles = [], refFor = null, aiHelpCtl = null;
+  const FILES_INTRO = "The student attached these files to help you with their writing: for example marking criteria or a rubric, a task sheet, class notes, or a photo of their plan. Use them. If they contain marking criteria, mark and advise against those criteria.";
+  const LOOK_CHIPS = isEssay
+    ? ["Check my paragraph structure", "Is my evidence strong enough?", "Is my thesis clear?", "Spelling and punctuation", "Persuasive language", "Match my teacher's rubric"]
+    : ["Show, don't tell", "Check my dialogue", "Describe the setting more", "Spelling and punctuation", "Is my ending satisfying?", "Match my teacher's rubric"];
+  const loadRefFiles = (piece) => {
+    refFiles = (piece.refFiles || []).map((f, i) => ({ id: `r${i}-${Date.now()}`, name: f.name, status: "ready", text: f.text, images: [], summary: `${String(f.text).split(/\s+/).filter(Boolean).length} words (saved)` }));
+    refFor = piece.id;
+  };
+  // Only the words from the files are kept with the piece (not photos), so they're still there when the piece is reopened.
+  const syncRefFiles = (piece) => {
+    let budget = 20000;
+    const list = refFiles.filter((f) => f.status === "ready" && f.text).slice(0, 6).map((f) => {
+      const text = f.text.slice(0, Math.max(0, Math.min(8000, budget))); budget -= text.length; return { name: f.name, text };
+    }).filter((f) => f.text);
+    piece.refFiles = list.length ? list : undefined;
+  };
+  const planBlock = (piece) => {
+    const f = planFields(t, piece).filter((x) => String(piece.plan?.[x.key] || "").trim());
+    return f.length ? `\nTheir plan so far:\n"""\n${f.map((x) => `${x.label}: ${piece.plan[x.key]}`).join("\n")}\n"""\n` : "";
+  };
+  // Every request to the AI about this piece carries the files the student attached.
+  const askWithFiles = async (prompt) => askTutor(refFiles.length ? await withUploads(prompt, refFiles, FILES_INTRO) : prompt);
+  const helpBusy = () => !!aiHelpCtl?.busy();
+  function aiHelpHTML(piece) {
+    return `
+      <details class="evidence" id="ai-help" ${piece.lookFor || refFiles.length ? "open" : ""}>
+        <summary>🎯 Notes &amp; files for the AI</summary>
+        <div class="stack" style="margin-top:10px;">
+          <div>
+            <label class="field" for="w-lookfor">What should the AI look for?</label>
+            <div class="muted small" style="margin-bottom:6px;">Tell it what matters, like your teacher's rubric or things you want checked. It uses this in its feedback and when you chat with it.</div>
+            <div class="look-chips">${LOOK_CHIPS.map((c) => `<button type="button" class="btn secondary sm" data-look="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+            <textarea id="w-lookfor" rows="3" maxlength="1500" placeholder="e.g. Check I've used three pieces of evidence and a counter-argument. My teacher wants a formal tone."></textarea>
+          </div>
+          <div>
+            <label class="field">Files for the AI</label>
+            ${uploadBoxHTML("Marking criteria, a rubric, a task sheet, class notes, or a photo of your plan. The AI reads them with every message.")}
+          </div>
+        </div>
+      </details>`;
+  }
+  function wireAIHelp(piece, saver) {
+    const host = $("#ai-help-host", root);
+    if (!host) return;
+    if (refFor !== piece.id) loadRefFiles(piece);
+    host.innerHTML = aiHelpHTML(piece);
+    const ta = $("#w-lookfor", host);
+    ta.value = piece.lookFor || "";
+    ta.addEventListener("input", () => { piece.lookFor = ta.value; saver.scheduleSave(); });
+    $$("[data-look]", host).forEach((b) => b.addEventListener("click", () => {
+      const line = b.dataset.look;
+      if (ta.value.includes(line)) return;
+      ta.value = (ta.value.trim() ? ta.value.trim() + "\n" : "") + line;
+      piece.lookFor = ta.value; saver.scheduleSave();
+    }));
+    aiHelpCtl = wireUploadBox(host, refFiles, () => { syncRefFiles(piece); saver.scheduleSave(); });
+  }
+
   // ----- Stage 1: plan -----
   function planStage(piece, { isNew }) {
     piece.stage = "plan";
@@ -2157,6 +2223,7 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
         </div>
         <div class="row between"><div id="timer-host"></div><span class="muted small" id="save-state"></span></div>
         <div id="evidence-host"></div>
+        <div id="ai-help-host"></div>
         <div class="plan-grid">
           ${fields.map((f) => `
             <div>
@@ -2169,6 +2236,7 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
           <button class="btn ghost" id="back">← My writing</button>
           <button class="btn" id="to-write">Start writing →</button>
         </div>
+        <div id="chat-host"></div>
       </div>`;
 
     const saver = autosave(piece, isNew);
@@ -2176,6 +2244,8 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
     cleanup = () => { timer.stop(); if (saver.pending()) saver.saveNow(); };
     evidenceBank(piece, saver, { open: true });
     wireStepper(piece, saver);
+    wireAIHelp(piece, saver);
+    writingChat(piece, saver);
 
     $$("[data-plan]", root).forEach((box) => {
       box.value = piece.plan[box.dataset.plan] || "";
@@ -2215,6 +2285,7 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
             <dl class="plan-view">${planEntries.map((f) => `<dt>${esc(f.label)}</dt><dd>${esc(piece.plan[f.key])}</dd>`).join("")}</dl>
           </details>` : ""}
         <div id="evidence-host"></div>
+        <div id="ai-help-host"></div>
         <div id="editor-area">
           ${piece.parts
             ? piece.parts.map((_, i) => `
@@ -2251,6 +2322,7 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
     cleanup = () => { timer.stop(); if (saver.pending()) saver.saveNow(); };
     evidenceBank(piece, saver, { open: !planEntries.length });
     wireStepper(piece, saver);
+    wireAIHelp(piece, saver);
 
     const boxes = piece.parts ? $$("[data-part]", root) : [$("#editor", root)];
     if (piece.parts) boxes.forEach((b, i) => { b.value = piece.parts[i] || ""; });
@@ -2282,6 +2354,7 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
     });
     $("#get-fb", root).addEventListener("click", async () => {
       if (countWords(writingText(piece)) < 15) return toast("Write a few more sentences first.");
+      if (helpBusy()) return toast("Your files are still loading. Wait a moment, then try again.");
       const btn = $("#get-fb", root);
       const box = $("#fb", root);
       btn.disabled = true;
@@ -2289,7 +2362,7 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
       show(box);
       box.textContent = "Reading your writing…";
       try {
-        piece.feedback = await askTutor(writingFeedbackPrompt(t, piece));
+        piece.feedback = await askWithFiles(writingFeedbackPrompt(t, piece));
         box.textContent = piece.feedback;
         await saver.saveNow();
         const chatBox = $("#chat-details", root);
@@ -2319,14 +2392,18 @@ Respond with ONLY valid JSON, no other text, in exactly this format:
         ${piece.chat.length ? `<button class="btn ghost sm" id="w-chat-clear" style="margin-top:6px;">Clear chat</button>` : ""}
       </details>`;
     const log = $("#w-chat", host);
-    const suggestions = isEssay
-      ? ["Is my argument convincing?", "How can I make my introduction stronger?", "Which paragraph is weakest, and why?", "Explain my feedback in simpler words"]
-      : ["What's the best part of my story?", "How can I make my opening more exciting?", "Where should I add more description?", "Explain my feedback in simpler words"];
+    const planning = () => !writingText(piece).trim();
+    const sugg = () => (planning()
+      ? (isEssay ? ["Help me brainstorm ideas", "Is my plan good? What's missing?", "Give me a strong opening idea", "What should go in each paragraph?"]
+        : ["Help me brainstorm story ideas", "Is my plan good? What's missing?", "Give me an exciting opening idea", "How should my story end?"])
+      : isEssay
+        ? ["Is my argument convincing?", "How can I make my introduction stronger?", "Which paragraph is weakest, and why?", "Check my work against my notes and files"]
+        : ["What's the best part of my story?", "How can I make my opening more exciting?", "Where should I add more description?", "Check my work against my notes and files"]);
 
     const draw = () => {
       if (!piece.chat.length) {
-        log.innerHTML = `<div class="chat-empty small">Ask anything about your ${kind} — the AI has read it${piece.feedback ? " and your feedback" : ""}.
-          <div class="chips">${suggestions.map((x) => `<button type="button" class="btn secondary sm">${esc(x)}</button>`).join("")}</div></div>`;
+        log.innerHTML = `<div class="chat-empty small">Ask anything about your ${kind} — the AI ${planning() ? "can see your plan and anything you've told it to look for" : "has read it"}${piece.feedback ? " and your feedback" : ""}${refFiles.length ? ", plus your files" : ""}.
+          <div class="chips">${sugg().map((x) => `<button type="button" class="btn secondary sm">${esc(x)}</button>`).join("")}</div></div>`;
         $$(".chips button", log).forEach((b) => b.addEventListener("click", () => send(b.textContent)));
         return;
       }
@@ -2350,7 +2427,7 @@ Their ${kind} so far:
 """
 ${writingText(piece) || "(nothing written yet)"}
 """
-${piece.feedback ? `
+${planBlock(piece)}${lookForBlock(piece)}${piece.feedback ? `
 Feedback they were given earlier:
 """
 ${piece.feedback}
@@ -2363,6 +2440,7 @@ Tutor:`;
     async function send(question) {
       question = question.trim();
       if (!question) return;
+      if (helpBusy()) return toast("Your files are still loading. Wait a moment, then send again.");
       const input = $("#w-chat-input", host);
       const btn = $("#w-chat-send", host);
       const prompt = buildPrompt(question);
@@ -2373,7 +2451,7 @@ Tutor:`;
       btn.disabled = true;
       draw();
       try {
-        pending.text = await askTutor(prompt);
+        pending.text = await askWithFiles(prompt);
       } catch (err) {
         console.error(err);
         piece.chat.pop();
