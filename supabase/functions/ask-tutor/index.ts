@@ -5,6 +5,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const MODEL = 'gemini-3.5-flash';
+// If the main model is overloaded, out of quota or not found, the next one is tried so students still get an answer.
+const MODELS = [MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash'];
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -77,25 +79,34 @@ Deno.serve(async (req) => {
     };
 
     let data: any = null;
-    let lastError: unknown = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    let lastError: any = null;
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const model = MODELS[Math.min(attempt, MODELS.length - 1)];
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
       );
       data = await response.json().catch(() => null);
       if (response.ok) { lastError = null; break; }
       lastError = data;
-      console.error(`Gemini API error (attempt ${attempt + 1}):`, JSON.stringify(data));
-      const code = response.status;
-      if ((code === 429 || code >= 500) && attempt < 2) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-        continue;
+      lastStatus = response.status;
+      // The real reason is in Supabase → Edge Functions → ask-tutor → Logs.
+      console.error(`Gemini API error (${model}, attempt ${attempt + 1}, HTTP ${response.status}):`, JSON.stringify(data));
+      if (response.status === 429 || response.status >= 500 || response.status === 404) {
+        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+        continue; // try again, on the next model
       }
       break;
     }
 
-    if (lastError) return json({ error: 'The AI is busy right now — please try again in a moment.' }, 500);
+    if (lastError) {
+      const why = String(lastError?.error?.message || '').slice(0, 160);
+      if (lastStatus === 401 || lastStatus === 403 || /api key/i.test(why)) return json({ error: `The AI key was rejected (HTTP ${lastStatus}). The site owner needs to check GEMINI_API_KEY. ${why}` }, 500);
+      if (lastStatus === 404) return json({ error: `The AI model couldn't be found (HTTP 404). The site owner needs to check the model name. ${why}` }, 500);
+      if (lastStatus === 429) return json({ error: `The AI is busy: its daily or per-minute limit has been reached (HTTP 429). ${why}` }, 500);
+      return json({ error: `The AI is having trouble right now (HTTP ${lastStatus}). ${why}` }, 500);
+    }
 
     const candidate = data?.candidates?.[0];
     // Join every text part (skipping any "thinking" parts).

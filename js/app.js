@@ -211,6 +211,7 @@ async function aiErrorInfo(err) {
   if (status === 401) return { retry: false, message: "Your login has run out. Refresh the page (and log in again if it asks), then try again." };
   if (/too long/i.test(text)) return { retry: false, message: "That's too much for the AI in one go. Remove a file or ask for a bit less, then try again." };
   if (status === 504 || status === 546 || /timed? ?out|time limit|WORKER_LIMIT/i.test(text)) return { retry: false, message: "The AI took too long to answer. Try asking for fewer questions at once (like 5), then ask for more." };
+  if (/AI key was rejected|model couldn't be found|HTTP 4(01|03|04)/i.test(text)) return { retry: false, message: "The AI isn't set up properly on the site right now. Please tell the site owner. (" + text.replace(/\s+/g, " ").trim().slice(0, 150) + ")" };
   if (status === 429 || /busy|overload|rate.?limit|quota|exhausted/i.test(text)) return { retry: true, message: "The AI is really busy right now (lots of people are using it). Wait about 30 seconds, then try again." };
   if (/stuck/i.test(text)) return { retry: true, message: "The AI got stuck on that one. Try asking in a different way, or for fewer questions at once." };
   return { retry: true, message: "Sorry, I couldn't reach the AI. Check your internet, then try again in a moment." };
