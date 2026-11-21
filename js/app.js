@@ -267,6 +267,19 @@ function planSaving(p) {
   if (!base || p.months <= base.months) return 0;
   return Math.round((base.price / base.months) * p.months - p.price);
 }
+// ---- Free trial: full access for 90 minutes from sign-up, then the account locks (paywall) until a plan is paid.
+// The end time is set by the database (supabase/free-trial.sql), so it can't be extended from the browser.
+const TRIAL_MINUTES = 90;
+const trialUsedHere = () => !!store("apex-trial-used");
+let serverOffset = 0; // server time minus this device's clock, so changing the clock doesn't extend a trial
+async function syncServerClock() {
+  try {
+    const t0 = Date.now();
+    const { data, error } = await sb.rpc("server_time");
+    if (!error && data) serverOffset = new Date(data).getTime() - (t0 + Date.now()) / 2;
+  } catch (e) { /* use the device clock */ }
+}
+const serverNow = () => Date.now() + serverOffset;
 function renderPlanPicker() {
   const box = $("#auth-plan-list");
   if (!box) return;
@@ -276,7 +289,7 @@ function renderPlanPicker() {
     const save = planSaving(p);
     const custom = p.title !== monthsLabel(p.months);
     return `<label class="choice plan${p.badge ? " has-badge" : ""}"><input type="radio" name="auth-plan" value="${esc(p.id)}"${p.id === checked ? " checked" : ""}><span>${p.badge ? `<em class="plan-badge">${esc(p.badge)}</em>` : ""}${custom ? `<strong class="plan-title">${esc(p.title)}</strong>` : ""}<b>${money(p.price)}</b><small>${monthsLabel(p.months)}${save > 0 ? ` · save ${money(save)}` : ""}</small>${p.description ? `<small class="plan-desc">${esc(p.description)}</small>` : ""}</span></label>`;
-  }).join("");
+  }).join("") + (trialUsedHere() ? "" : `<label class="choice plan trial-card" style="grid-column:1/-1;"><input type="radio" name="auth-plan" value="trial"${checked === "trial" ? " checked" : ""}><span><strong class="plan-title">Try it free for ${TRIAL_MINUTES / 60} hours</strong><small>No payment. Full access for ${TRIAL_MINUTES / 60} hours, then your account locks until you pay for a plan.</small></span></label>`);
 }
 // Every place the page spells the prices out (the Terms, the paywall) reads from the same list.
 function fillPlanTexts() {
@@ -591,7 +604,9 @@ $("#auth-form").addEventListener("submit", async (e) => {
       if (error) throw error;
       store(`apex-terms-seen-${email}`, TERMS_VERSION);
       const planPick = $('input[name="auth-plan"]:checked');
-      const pickedPlan = planPick && chosenRole() !== "parent" ? PLAN_LIST.find((p) => p.id === planPick.value) : null;
+      const wantsTrial = !!planPick && planPick.value === "trial" && chosenRole() !== "parent" && !trialUsedHere();
+      const pickedPlan = planPick && chosenRole() !== "parent" && !wantsTrial ? PLAN_LIST.find((p) => p.id === planPick.value) : null;
+      if (wantsTrial) { store(`apex-trial-${email}`, 1); store("apex-trial-used", 1); }
       if (pickedPlan) store(planKey(email), { months: pickedPlan.months, name: pickedPlan.title });
       store(roleKey(email), $('input[name="auth-role"]:checked').value);
       const pickedLevel = chosenRole() === "student" ? $("#auth-level").value : "";
@@ -600,7 +615,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
         const planMonths = pickedPlan ? pickedPlan.months : 4;
         const role = $('input[name="auth-role"]:checked').value;
         const base = { id: data.user.id, email, username: name, has_paid: false, agreed_to_terms: true };
-        await insertProfile(base, { plan_months: planMonths, ...(pickedPlan ? { plan_name: pickedPlan.title } : {}), account_type: role, ...(pickedLevel ? { year_level: pickedLevel } : {}) });
+        await insertProfile(base, { plan_months: planMonths, ...(pickedPlan ? { plan_name: pickedPlan.title } : {}), account_type: role, ...(pickedLevel ? { year_level: pickedLevel } : {}), ...(wantsTrial ? { trial_ends_at: new Date(Date.now() + TRIAL_MINUTES * 60000).toISOString() } : {}) });
         claimNewSession = true;
         await handleAuthenticatedUser(data.user);
       } else {
@@ -696,7 +711,7 @@ async function selectDroppingMissing(run, required, optional) {
 // Creates the profile row. The newer columns might not exist in the database yet, so if the insert fails it tries again
 // without the optional ones (year level first, then account type, then plan).
 async function insertProfile(base, extras) {
-  const order = ["year_level", "account_type", "plan_name", "plan_months"];
+  const order = ["trial_ends_at", "year_level", "account_type", "plan_name", "plan_months"];
   const fields = { ...extras };
   for (let i = 0; i <= order.length; i++) {
     const { error } = await sb.from("profiles").insert({ ...base, ...fields });
@@ -713,22 +728,26 @@ async function handleAuthenticatedUser(user, retried = false) {
   let { data: profile, error } = await selectDroppingMissing(
     (cols) => sb.from("profiles").select(cols).eq("id", user.id).single(),
     ["username", "has_paid", "paid_until", "points", "xp", "progress", "friends", "is_admin"],
-    ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "plan_name", "account_type", "active_session", "allow_multi_device", "year_level", "show_points"],
+    ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "plan_name", "account_type", "active_session", "allow_multi_device", "year_level", "show_points", "trial_ends_at"],
   );
   if (error?.code === "PGRST116") {
     const chosen = storedPlan(user.email);
     const row = { id: user.id, email: user.email, has_paid: false, points: 0, progress: {} };
     const role = store(roleKey(user.email)) || "student";
     const lvl = store(levelKeyFor(user.email)) || "";
-    await insertProfile(row, { plan_months: chosen.months, ...(chosen.name ? { plan_name: chosen.name } : {}), account_type: role, ...(role === "student" && LEARN_LEVELS[lvl] && lvl !== "auto" ? { year_level: lvl } : {}) });
-    if (role === "parent" && !retried) return handleAuthenticatedUser(user, true); // parent accounts are free
+    const wantTrial = !!store(`apex-trial-${String(user.email).toLowerCase()}`);
+    await insertProfile(row, { ...(wantTrial ? { trial_ends_at: new Date(Date.now() + TRIAL_MINUTES * 60000).toISOString() } : {}), plan_months: chosen.months, ...(chosen.name ? { plan_name: chosen.name } : {}), account_type: role, ...(role === "student" && LEARN_LEVELS[lvl] && lvl !== "auto" ? { year_level: lvl } : {}) });
+    if ((role === "parent" || wantTrial) && !retried) return handleAuthenticatedUser(user, true); // parent accounts are free; a trial starts now
     return showPaywall(chosen.months, chosen.name);
   }
   if (error) { console.error("Apex: profile fetch failed —", error); return showPaywall(); }
 
   const active = profile.has_paid && (!profile.paid_until || new Date(profile.paid_until) > new Date());
   const freeParent = profile.account_type === "parent" && !profile.is_admin; // parent accounts are free, and view-only
-  if (!active && !freeParent) { const sp = storedPlan(user.email); return showPaywall(profile.plan_months || sp.months, profile.plan_name || sp.name); }
+  await syncServerClock();
+  const trialEnd = profile.trial_ends_at ? new Date(profile.trial_ends_at).getTime() : 0;
+  const trialLive = !active && !profile.is_admin && trialEnd > serverNow();
+  if (!active && !freeParent && !trialLive) { const sp = storedPlan(user.email); return showPaywall(profile.plan_months || sp.months, profile.plan_name || sp.name, !!trialEnd); }
 
   const claim = await claimDevice(profile, fresh);
   if (!claim.ok) { await logout(); showDeviceKickedMessage(); return; }
@@ -750,6 +769,7 @@ async function handleAuthenticatedUser(user, retried = false) {
     yearLevel: LEARN_LEVELS[profile.year_level] ? profile.year_level : null,
     levelsManaged: !profile.is_admin && profile.year_level !== undefined,
     paidUntil: profile.paid_until || null,
+    trialEndsAt: trialLive ? trialEnd : null,
     showPoints: profile.show_points !== false,
   };
   if (me.accountType === "student" && typeof ensureParentCode === "function") ensureParentCode(); // every student has a parent code ready
@@ -758,7 +778,26 @@ async function handleAuthenticatedUser(user, retried = false) {
   enterApp();
 }
 
-function showPaywall(planMonths = 4, planName = "") {
+// Shows how long is left on a free trial; when it hits zero the account locks.
+let trialTimer = null;
+function stopTrialWatch() { clearInterval(trialTimer); trialTimer = null; $("#trial-bar")?.classList.add("hidden"); }
+function startTrialWatch() {
+  stopTrialWatch();
+  if (!me?.trialEndsAt) return;
+  const bar = $("#trial-bar");
+  const tick = () => {
+    const left = me.trialEndsAt - serverNow();
+    if (left <= 0) { const m = me; me = null; showPaywall(m.planMonths, m.planName, true); return; }
+    const mins = Math.ceil(left / 60000);
+    bar.innerHTML = `⏳ Free trial: <strong>${mins >= 60 ? Math.floor(mins / 60) + " h " + (mins % 60) + " min" : mins + " min"}</strong> left · <a href="#/settings">Choose a plan</a>`;
+    bar.classList.remove("hidden");
+  };
+  tick();
+  trialTimer = setInterval(tick, 15000);
+}
+function showPaywall(planMonths = 4, planName = "", trialEnded = false) {
+  stopTrialWatch();
+  $("#paywall-trial")?.classList.toggle("hidden", !trialEnded);
   $("#paywall-email").textContent = authUser?.email || "";
   $("#paywall-plan").textContent = planLine(planMonths, planName);
   showScreen("paywall");
@@ -781,6 +820,7 @@ async function loadCustomQuestions() {
 // ---------------- App shell & routing ----------------
 function enterApp() {
   if (typeof startDeviceWatch === "function") startDeviceWatch();
+  startTrialWatch();
   const parent = isParent();
   const navItems = parent ? [{ route: "home", label: "Home", icon: "🏠" }, { route: "practice", label: "Topics", icon: "📚" }, { route: "progress", label: "Grades", icon: "📈" }, { route: "schedule", label: "Schedule", icon: "🗓️" }] : NAV;
   const items = parent ? navItems : [...NAV, { route: "notes", label: "Notes & calendar", icon: "🗓️" }];
@@ -840,8 +880,9 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-18a";
+const TERMS_VERSION = "2026-11-21a";
 const TERMS_CHANGES = [
+  "New — free trial: when you sign up you can choose a free 1.5-hour trial instead of a plan. After 1.5 hours the account locks until you pay for a plan (cash in hand to the site owner). Each device gets one trial.",
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
   "New — calendar: put your tests, assignments and reminders on the calendar (Notes & calendar). It's saved to your account, and the AI can see what's coming up so it can help you prepare (you can turn this off).",

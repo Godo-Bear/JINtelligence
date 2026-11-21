@@ -15,15 +15,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261121b">
+<link rel="icon" type="image/svg+xml" href="assets/logo.svg?v=20261121c">
 <!-- Home-screen icon: iPhone/iPad use apple-touch-icon, Android uses the manifest -->
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261121b">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261121c">
 <meta name="apple-mobile-web-app-title" content="JINtelligence">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#8A1C3C">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="css/styles.css?v=20261121b">
+<link rel="stylesheet" href="css/styles.css?v=20261121c">
 <script>
   // Apply the saved theme before first paint to avoid a flash.
   try { const t = localStorage.getItem("apex-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
@@ -33,11 +33,11 @@
 <body>
 
 <template id="logo-tpl">
-  <img class="logo-mark" src="assets/logo.svg?v=20261121b" alt="">
+  <img class="logo-mark" src="assets/logo.svg?v=20261121c" alt="">
 </template>
 <template id="crest-tpl">
-  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261121b" alt="JINtelligence">
-  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261121b" alt="JINtelligence">
+  <img class="logo-crest crest-light" src="assets/crest.svg?v=20261121c" alt="JINtelligence">
+  <img class="logo-crest crest-dark" src="assets/crest-dark.svg?v=20261121c" alt="JINtelligence">
 </template>
 
 <!-- Loading -->
@@ -131,6 +131,7 @@
   <div class="card auth-card" style="text-align:center;">
     <div class="logo logo-stack" data-logo></div>
     <h2 style="margin-top:20px;">Almost there</h2>
+    <p id="paywall-trial" class="hidden" style="background:var(--accent-soft,#eef);padding:10px;border-radius:10px;"><strong>Your free trial has ended.</strong> Hope you liked JINtelligence! Pay for a plan below to keep going; your account and progress are saved.</p>
     <p class="muted">Your account (<strong id="paywall-email"></strong>) isn't active yet. Your plan is <strong id="paywall-plan">$15 for 4 months</strong>, <strong>paid cash in hand</strong> to the site owner. The owner unlocks accounts by hand, so it may take a while after you've paid. Once it's unlocked, check again.</p>
     <p class="small"><a href="#" data-open="terms">Terms &amp; Conditions</a></p>
     <button id="paywall-recheck" class="btn block" style="margin-top:8px;">I've paid — check again</button>
@@ -169,6 +170,7 @@
       </div>
     </div>
     <div class="admin-bar"><span class="wordmark"><b>JIN</b>telligence</span><strong>🛠 Admin panel</strong><a class="btn ghost" href="./">Open the site ↗</a></div>
+    <div id="trial-bar" class="hidden"></div>
     <div id="event-bar" class="hidden"></div>
     <div id="view"></div>
     <footer class="owner-mark">© 2026 Jayden Narayan · JINtelligence · All rights reserved</footer>
@@ -274,36 +276,36 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/data.js?v=20261121b"></script>
-<script src="js/lessons.js?v=20261121b"></script>
-<script src="js/visuals.js?v=20261121b"></script>
-<script src="js/sci-visuals.js?v=20261121b"></script>
-<script src="js/science.js?v=20261121b"></script>
-<script src="js/history-geo.js?v=20261121b"></script>
-<script src="js/bank.js?v=20261121b"></script>
-<script src="js/topics-more.js?v=20261121b"></script>
-<script src="js/challenge.js?v=20261121b"></script>
-<script src="js/coverage.js?v=20261121b"></script>
-<script src="js/problems.js?v=20261121b"></script>
-<script src="js/year8-10.js?v=20261121b"></script>
-<script src="js/uploads.js?v=20261121b"></script>
-<script src="js/study.js?v=20261121b"></script>
-<script src="js/saved-tests.js?v=20261121b"></script>
-<script src="js/review.js?v=20261121b"></script>
-<script src="js/results.js?v=20261121b"></script>
-<script src="js/devices.js?v=20261121b"></script>
-<script src="js/teacher.js?v=20261121b"></script>
-<script src="js/parent.js?v=20261121b"></script>
-<script src="js/language.js?v=20261121b"></script>
-<script src="js/voice.js?v=20261121b"></script>
-<script src="js/notes.js?v=20261121b"></script>
-<script src="js/public-tests.js?v=20261121b"></script>
-<script src="js/ai-memory.js?v=20261121b"></script>
-<script src="js/calendar.js?v=20261121b"></script>
-<script src="js/planner.js?v=20261121b"></script>
-<script src="js/game-art.js?v=20261121b"></script>
-<script src="js/games.js?v=20261121b"></script>
-<script src="js/gifts.js?v=20261121b"></script>
-<script src="js/app.js?v=20261121b"></script>
+<script src="js/data.js?v=20261121c"></script>
+<script src="js/lessons.js?v=20261121c"></script>
+<script src="js/visuals.js?v=20261121c"></script>
+<script src="js/sci-visuals.js?v=20261121c"></script>
+<script src="js/science.js?v=20261121c"></script>
+<script src="js/history-geo.js?v=20261121c"></script>
+<script src="js/bank.js?v=20261121c"></script>
+<script src="js/topics-more.js?v=20261121c"></script>
+<script src="js/challenge.js?v=20261121c"></script>
+<script src="js/coverage.js?v=20261121c"></script>
+<script src="js/problems.js?v=20261121c"></script>
+<script src="js/year8-10.js?v=20261121c"></script>
+<script src="js/uploads.js?v=20261121c"></script>
+<script src="js/study.js?v=20261121c"></script>
+<script src="js/saved-tests.js?v=20261121c"></script>
+<script src="js/review.js?v=20261121c"></script>
+<script src="js/results.js?v=20261121c"></script>
+<script src="js/devices.js?v=20261121c"></script>
+<script src="js/teacher.js?v=20261121c"></script>
+<script src="js/parent.js?v=20261121c"></script>
+<script src="js/language.js?v=20261121c"></script>
+<script src="js/voice.js?v=20261121c"></script>
+<script src="js/notes.js?v=20261121c"></script>
+<script src="js/public-tests.js?v=20261121c"></script>
+<script src="js/ai-memory.js?v=20261121c"></script>
+<script src="js/calendar.js?v=20261121c"></script>
+<script src="js/planner.js?v=20261121c"></script>
+<script src="js/game-art.js?v=20261121c"></script>
+<script src="js/games.js?v=20261121c"></script>
+<script src="js/gifts.js?v=20261121c"></script>
+<script src="js/app.js?v=20261121c"></script>
 </body>
 </html>
