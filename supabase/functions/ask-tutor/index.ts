@@ -100,6 +100,31 @@ Deno.serve(async (req) => {
       break;
     }
 
+    // Free back-up AI: if Google's AI is out of quota or down, use Groq (free tier) for text questions.
+    // Needs a GROQ_API_KEY secret (free from console.groq.com). Photos still need Google's AI.
+    const groqKey = Deno.env.get('GROQ_API_KEY');
+    if (lastError && groqKey && parts.length === 1) {
+      const groqModels = [Deno.env.get('GROQ_MODEL') || 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+      for (const gm of groqModels) {
+        try {
+          const gr = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+            body: JSON.stringify({
+              model: gm,
+              messages: [{ role: 'system', content: SYSTEM_PROMPT + (allowDiagram && !asJson ? DIAGRAM_INSTRUCTIONS : '') }, { role: 'user', content: question }],
+              max_tokens: 8000,
+              ...(asJson ? { response_format: { type: 'json_object' } } : {}),
+            }),
+          });
+          const gd = await gr.json().catch(() => null);
+          const text = String(gd?.choices?.[0]?.message?.content || '').trim();
+          if (gr.ok && text) return json({ answer: text });
+          console.error(`Groq error (${gm}, HTTP ${gr.status}):`, JSON.stringify(gd));
+        } catch (e) { console.error('Groq failed:', e); }
+      }
+    }
+
     if (lastError) {
       const why = String(lastError?.error?.message || '').slice(0, 160);
       if (lastStatus === 401 || lastStatus === 403 || /api key/i.test(why)) return json({ error: `The AI key was rejected (HTTP ${lastStatus}). The site owner needs to check GEMINI_API_KEY. ${why}` }, 500);

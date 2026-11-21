@@ -320,7 +320,9 @@ const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n
 const AI_LIMITS = { tutor: 100, aitest: 15 };
 // The base daily limit, boosted by whatever extra % an admin has granted this account (Admin → Manage →
 // "AI bonus"). 50% bonus on 40 tutor messages = 60; rounds down so a bonus never grants a fraction of a use.
-const aiLimitFor = (kind) => Math.floor(AI_LIMITS[kind] * (1 + (me.aiBonusPct || 0) / 100));
+// Free-trial accounts get a small allowance so the AI (which costs money) can't be used up by throwaway accounts.
+const AI_LIMITS_TRIAL = { tutor: 15, aitest: 2 };
+const aiLimitFor = (kind) => Math.floor((me.trialEndsAt ? AI_LIMITS_TRIAL : AI_LIMITS)[kind] * (1 + (me.aiBonusPct || 0) / 100));
 const aiUsageDay = () => new Date().toISOString().slice(0, 10);
 // Reads today's usage row for the current user. Treated as 0/0 if there's no row yet, or on any error
 // (fails open — a network hiccup shouldn't lock a student out of the AI).
@@ -337,7 +339,7 @@ async function checkAiLimit(kind) {
   const used = (await aiUsageToday())[kind];
   const limit = aiLimitFor(kind);
   if (used < limit) return true;
-  toast(`You've used all ${limit} of your ${kind === "tutor" ? "AI tutor messages" : "AI-made tests"} for today — try again tomorrow!`);
+  toast(`You've used all ${limit} of your ${kind === "tutor" ? "AI tutor messages" : "AI-made tests"} for today${me.trialEndsAt ? " (free trials have a small AI allowance — pick a plan for more)" : " — try again tomorrow"}!`);
   return false;
 }
 // Call once an AI tutor message or AI-made test has actually succeeded, to count it against today's limit.
