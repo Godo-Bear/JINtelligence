@@ -268,9 +268,9 @@ function planSaving(p) {
   return Math.round((base.price / base.months) * p.months - p.price);
 }
 // ---- Free trial: a student asks for one at sign-up; an admin approves it (Admin → Accounts → Start trial). The trial then
-// gives full access for 90 minutes and the account locks (paywall) until a plan is paid.
+// gives full access for one day and the account locks (paywall) until a plan is paid.
 // Only admins can set the trial end time (supabase/free-trial.sql), so it can't be changed from the browser.
-const TRIAL_MINUTES = 90;
+const TRIAL_MINUTES = 24 * 60; // one day
 const trialUsedHere = () => !!store("apex-trial-used");
 let serverOffset = 0; // server time minus this device's clock, so changing the clock doesn't extend a trial
 async function syncServerClock() {
@@ -290,7 +290,7 @@ function renderPlanPicker() {
     const save = planSaving(p);
     const custom = p.title !== monthsLabel(p.months);
     return `<label class="choice plan${p.badge ? " has-badge" : ""}"><input type="radio" name="auth-plan" value="${esc(p.id)}"${p.id === checked ? " checked" : ""}><span>${p.badge ? `<em class="plan-badge">${esc(p.badge)}</em>` : ""}${custom ? `<strong class="plan-title">${esc(p.title)}</strong>` : ""}<b>${money(p.price)}</b><small>${monthsLabel(p.months)}${save > 0 ? ` · save ${money(save)}` : ""}</small>${p.description ? `<small class="plan-desc">${esc(p.description)}</small>` : ""}</span></label>`;
-  }).join("") + (trialUsedHere() ? "" : `<label class="choice plan trial-card" style="grid-column:1/-1;"><input type="radio" name="auth-plan" value="trial"${checked === "trial" ? " checked" : ""}><span><strong class="plan-title">Ask for a free ${TRIAL_MINUTES / 60}-hour trial</strong><small>No payment. The site owner approves it, then you get full access for ${TRIAL_MINUTES / 60} hours before the account locks until you pay for a plan.</small></span></label>`);
+  }).join("") + (trialUsedHere() ? "" : `<label class="choice plan trial-card" style="grid-column:1/-1;"><input type="radio" name="auth-plan" value="trial"${checked === "trial" ? " checked" : ""}><span><strong class="plan-title">Ask for a free 1-day trial</strong><small>No payment. The site owner approves it, then you get full access for 1 day before the account locks until you pay for a plan.</small></span></label>`);
 }
 // Every place the page spells the prices out (the Terms, the paywall) reads from the same list.
 function fillPlanTexts() {
@@ -882,9 +882,9 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-21b";
+const TERMS_VERSION = "2026-11-21c";
 const TERMS_CHANGES = [
-  "New — free trial: when you sign up you can ask for a free 1.5-hour trial instead of a plan. The site owner approves it; the 1.5 hours start when they do. After that the account locks until you pay for a plan (cash in hand to the site owner). Each device can ask once.",
+  "New — free trial: when you sign up you can ask for a free 1-day trial instead of a plan. The site owner approves it; the 1 day starts when they do. After that the account locks until you pay for a plan (cash in hand to the site owner). Each device can ask once.",
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
   "New — calendar: put your tests, assignments and reminders on the calendar (Notes & calendar). It's saved to your account, and the AI can see what's coming up so it can help you prepare (you can turn this off).",
@@ -4143,7 +4143,7 @@ function pageAdmin(view) {
             <div class="manage-panel">
               <div class="manage-group"><div class="manage-title">Plan &amp; time</div><div class="manage-btns">
                 ${btn("renew", "Add / take months…")}
-                ${btn("start-trial", a.trial_ends_at ? "Restart 1.5 h trial" : "Start 1.5 h trial")}
+                ${btn("start-trial", a.trial_ends_at ? "Restart 1-day trial" : "Start 1-day trial")}
                 ${btn("give", giving.has(a.id) ? "Close gifts" : "🎁 Give / take", "")}
               </div></div>
               <div class="manage-group"><div class="manage-title">Points &amp; XP</div><div class="manage-btns">
@@ -4341,7 +4341,7 @@ function pageAdmin(view) {
       case "set-xp": { const n = askNumber(`Set XP for ${name}:`); if (n !== null) update = { xp: n }; break; }
       case "start-trial": {
         if (a.has_paid) { alert(`${name} is already paid up.`); break; }
-        if (confirm(`Start a ${TRIAL_MINUTES / 60}-hour free trial for ${name}? It begins now.`)) update = { trial_ends_at: new Date(serverNow() + TRIAL_MINUTES * 60000).toISOString(), trial_requested: false, deleted: false };
+        if (confirm(`Start a 1-day free trial for ${name}? It begins now.`)) update = { trial_ends_at: new Date(serverNow() + TRIAL_MINUTES * 60000).toISOString(), trial_requested: false, deleted: false };
         break;
       }
       case "renew": {
