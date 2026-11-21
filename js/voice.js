@@ -5,6 +5,8 @@
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 const canListen = !!SpeechRec;
 const canSpeak = "speechSynthesis" in window;
+// The language chosen in Settings (see js/language.js); Australian English until it has loaded.
+const speechLangNow = () => (typeof speechLang === "function" ? speechLang() : "en-AU");
 
 const voicePrefKey = () => `apex-voice-${authUser.id}`;
 // Safe to call before the rest of the site has loaded or anyone has logged in.
@@ -13,7 +15,8 @@ const voicePrefs = () => ({ name: "", rate: 1, ...((typeof store === "function" 
 let voiceList = [];
 function loadVoices() {
   if (!canSpeak) return [];
-  voiceList = speechSynthesis.getVoices().filter((v) => /^en(-|_|$)/i.test(v.lang));
+  const base = speechLangNow().split("-")[0];
+  voiceList = speechSynthesis.getVoices().filter((v) => new RegExp(`^${base}(-|_|$)`, "i").test(v.lang));
   return voiceList;
 }
 if (canSpeak) { loadVoices(); speechSynthesis.addEventListener?.("voiceschanged", () => { loadVoices(); fillVoiceSelects(); }); }
@@ -27,6 +30,7 @@ function voiceScore(v) {
   if (/natural/i.test(v.name) && /online|microsoft/i.test(v.name)) s += 40;   // Microsoft Edge neural voices
   if (/premium|enhanced|neural|siri/i.test(v.name)) s += 30;                    // Apple / neural voices
   if (/^google/i.test(v.name)) s += 20;                                         // Chrome's Google voices
+  if (String(v.lang).toLowerCase().replace("_", "-") === speechLangNow().toLowerCase()) s += 8;
   if (/en[-_]AU/i.test(v.lang)) s += 6; else if (/en[-_]GB/i.test(v.lang)) s += 4; else if (/en[-_]US/i.test(v.lang)) s += 3;
   if (/william|daniel|lee|gordon|ryan|guy|christopher|eric|andrew|brian|male/i.test(v.name)) s += 2; // a calm male voice, like the video ad
   if (v.localService !== false) s += 12; // installed on the device: works offline and on school networks
@@ -36,7 +40,7 @@ function voiceScore(v) {
 }
 const badVoices = new Set(); // voices that didn't play on this visit
 function pickVoice() {
-  const voices = voiceList.length ? voiceList : loadVoices();
+  const voices = loadVoices(); // (re-read each time, in case the language was changed)
   const chosen = voices.find((v) => v.name === voicePrefs().name && !badVoices.has(v.name));
   if (chosen) return chosen;
   return voices.slice().sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
@@ -70,7 +74,7 @@ function speakDevice(text, onEnd = () => {}, onWord = () => {}) {
     if (stopped || speakingNow !== token) return;
     if (i >= parts.length) return finish();
     const u = new SpeechSynthesisUtterance(parts[i].trim());
-    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = "en-AU";
+    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = speechLangNow();
     u.rate = rate;
     u.volume = 1;
     let done = false, started = false;
@@ -107,7 +111,7 @@ function stopSpeaking() {
 const NATURAL_VOICES = [["azure:en-AU-WilliamNeural", "William — Australian male (natural)"], ["azure:en-AU-NatashaNeural", "Natasha — Australian female (natural)"]];
 let naturalOff = false;           // turned off for this visit after a failure
 let voiceAudioEl = null, voiceAudioCtx = null, voiceAnalyser = null;
-const usingNatural = () => !naturalOff && String(voicePrefs().name || "").startsWith("azure:");
+const usingNatural = () => !naturalOff && speechLangNow() === "en-AU" && String(voicePrefs().name || "").startsWith("azure:");
 function voiceAudio() {
   if (voiceAudioEl) return voiceAudioEl;
   voiceAudioEl = new Audio();
@@ -179,7 +183,7 @@ function speak(text, onEnd = () => {}, onWord = () => {}) {
 function listenOnce({ onText, onInterim = () => {}, onEnd = () => {}, onError = () => {} }) {
   if (!canListen) { onError("not-supported"); return () => {}; }
   const rec = new SpeechRec();
-  rec.lang = "en-AU";
+  rec.lang = speechLangNow();
   rec.interimResults = true;
   rec.continuous = false;
   rec.maxAlternatives = 1;

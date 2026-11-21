@@ -61,7 +61,7 @@ const GAME_BADGES = [
 
 const gameKey = (name) => `apex-game-${name}-${authUser.id}`;
 const timeLabel = (v) => (GAME_TIMES.find((t) => t.v === v) || GAME_TIMES[1]).label;
-const fmtCoins = (n) => "🪙 " + n.toLocaleString("en-AU");
+const fmtCoins = (n) => "🪙 " + n.toLocaleString(uiLocale());
 const clockText = (sec) => `${Math.floor(Math.max(0, sec) / 60)}:${String(Math.max(0, sec) % 60).padStart(2, "0")}`;
 const lowerIsBetter = (mode) => mode === "boss"; // boss: fewest questions to win
 function bestId(s) {
@@ -387,7 +387,7 @@ function playGame(view, s, extra = {}) {
   function drawLadder() {
     const safe = SAFE_STEPS.filter((n) => st.step >= n).pop();
     $("#g-ladder", view).innerHTML = `
-      <div class="ladder">${LADDER.map((v, i) => `<span class="rung${i < st.step ? " done" : ""}${i === st.step && !st.over ? " now" : ""}${SAFE_STEPS.includes(i + 1) ? " safe" : ""}" title="Question ${i + 1}: ${v.toLocaleString("en-AU")}">${i + 1}</span>`).join("")}</div>
+      <div class="ladder">${LADDER.map((v, i) => `<span class="rung${i < st.step ? " done" : ""}${i === st.step && !st.over ? " now" : ""}${SAFE_STEPS.includes(i + 1) ? " safe" : ""}" title="Question ${i + 1}: ${v.toLocaleString(uiLocale())}">${i + 1}</span>`).join("")}</div>
       <div class="row between small"><span>Banked: <b>${safe ? fmtCoins(LADDER[safe - 1]) : "🪙 0"}</b></span>
         <span class="lifelines">
           <button class="btn ghost sm" type="button" id="g-fifty"${st.fifty && !waiting ? "" : " disabled"}>50:50</button>

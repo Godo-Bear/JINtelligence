@@ -375,7 +375,7 @@ async function pageParentSchedule(view) {
         <div class="card cal-card">
           <div class="cal-head"><div class="cal-nav">
             <button type="button" class="btn ghost" data-shift="-1" aria-label="Previous month">‹</button>
-            <h2 class="cal-month">${first.toLocaleDateString("en-AU", { month: "long", year: "numeric" })}</h2>
+            <h2 class="cal-month">${first.toLocaleDateString(uiLocale(), { month: "long", year: "numeric" })}</h2>
             <button type="button" class="btn ghost" data-shift="1" aria-label="Next month">›</button></div>
             <button type="button" class="btn secondary sm" data-today>Today</button></div>
           <div class="cal-grid">${grid}</div>
@@ -390,7 +390,7 @@ async function pageParentSchedule(view) {
             ${dayBlocks.length ? `${planSummaryHTML(dayBlocks)}${planRowsHTML(dayBlocks, { readOnly: true })}` : `<p class="muted small" style="margin:0;">${data.blocksOk ? "No plan for this day." : "Their day plan isn't available yet."}</p>`}
           </div>
           <div class="card cal-soon"><h3 class="cal-side-h">⏰ Coming up</h3>
-            ${soon.length ? `<div class="cal-rows">${soon.map((e) => `<button type="button" class="cal-row k-${e.kind}" data-go="${e.date}"><span class="cal-date"><b>${fromYmd(e.date).getDate()}</b><small>${fromYmd(e.date).toLocaleDateString("en-AU", { month: "short" })}</small></span><span class="cal-row-main"><span class="cal-row-title">${CAL_KINDS[e.kind].icon} ${esc(e.title)}</span><span class="muted small">${CAL_KINDS[e.kind].name}${e.subject ? ` · ${esc(e.subject)}` : ""}</span></span><span class="cal-when${daysUntil(e.date) <= 2 ? " soon" : ""}">${esc(whenText(e.date))}</span></button>`).join("")}</div>` : `<p class="muted small" style="margin:0;">Nothing in the next 30 days.</p>`}
+            ${soon.length ? `<div class="cal-rows">${soon.map((e) => `<button type="button" class="cal-row k-${e.kind}" data-go="${e.date}"><span class="cal-date"><b>${fromYmd(e.date).getDate()}</b><small>${fromYmd(e.date).toLocaleDateString(uiLocale(), { month: "short" })}</small></span><span class="cal-row-main"><span class="cal-row-title">${CAL_KINDS[e.kind].icon} ${esc(e.title)}</span><span class="muted small">${CAL_KINDS[e.kind].name}${e.subject ? ` · ${esc(e.subject)}` : ""}</span></span><span class="cal-when${daysUntil(e.date) <= 2 ? " soon" : ""}">${esc(whenText(e.date))}</span></button>`).join("")}</div>` : `<p class="muted small" style="margin:0;">Nothing in the next 30 days.</p>`}
           </div>
           <p class="muted small">Only what ${esc(child.username || "your child")} adds to their own calendar and day plan shows here.</p>
         </div>

@@ -177,7 +177,7 @@ function wirePlanner(host) {
     $in(".pl-week").innerHTML = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(mon); d.setDate(mon.getDate() + i); const key = ymd(d);
       return `<button type="button" class="pl-wk${key === plannerView.day ? " sel" : ""}${key === today ? " today" : ""}" data-day="${key}" aria-label="${fmtDay(key, true)}${counts[key] ? `, ${counts[key]} planned` : ""}">
-        <small>${d.toLocaleDateString("en-AU", { weekday: "short" })}</small><b>${d.getDate()}</b><i class="pl-wk-dot${counts[key] ? " on" : ""}"></i></button>`;
+        <small>${d.toLocaleDateString(uiLocale(), { weekday: "short" })}</small><b>${d.getDate()}</b><i class="pl-wk-dot${counts[key] ? " on" : ""}"></i></button>`;
     }).join("");
   }
   function drawDay() {

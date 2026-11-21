@@ -27,7 +27,7 @@ const fromYmd = (s) => { const [y, m, d] = String(s).split("-").map(Number); ret
 const isYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")) && ymd(fromYmd(s)) === s;
 const todayYmd = () => ymd(new Date());
 const daysUntil = (s) => Math.round((fromYmd(s) - fromYmd(todayYmd())) / 86400000);
-const fmtDay = (s, long) => fromYmd(s).toLocaleDateString("en-AU", long ? { weekday: "long", day: "numeric", month: "long" } : { weekday: "short", day: "numeric", month: "short" });
+const fmtDay = (s, long) => fromYmd(s).toLocaleDateString(uiLocale(), long ? { weekday: "long", day: "numeric", month: "long" } : { weekday: "short", day: "numeric", month: "short" });
 function whenText(s) {
   const n = daysUntil(s);
   if (n === 0) return "Today";
@@ -112,7 +112,7 @@ function refreshCalBadge() {
 const calendarVisibleToAI = () => prefs().calAI !== false;
 // Today's date (so the AI can work out "next Friday") and what's coming up.
 function calendarPrompt() {
-  const today = new Date().toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const today = new Date().toLocaleDateString(uiLocale(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const lines = calendarVisibleToAI() ? upcomingEvents(60).slice(0, 15).map((e) =>
     `- ${fmtDay(e.date)} (${whenText(e.date).toLowerCase()}): ${CAL_KINDS[e.kind].name}${e.subject ? ` (${e.subject})` : ""} — ${e.title}${e.details ? `. Details: ${e.details.slice(0, 200)}` : ""}`) : [];
   return `Today is ${today} (${todayYmd()}).${lines.length ? `\nComing up in the student's calendar (bring it up when it's relevant, e.g. offer to help them prepare for a test that's soon):\n${lines.join("\n")}` : ""}\n`;
@@ -165,7 +165,7 @@ function calendarAction(act, ev) {
 function calRowHTML(e) {
   const d = fromYmd(e.date), n = daysUntil(e.date);
   return `<button type="button" class="cal-row k-${e.kind}" data-go="${e.date}">
-    <span class="cal-date"><b>${d.getDate()}</b><small>${d.toLocaleDateString("en-AU", { month: "short" })}</small></span>
+    <span class="cal-date"><b>${d.getDate()}</b><small>${d.toLocaleDateString(uiLocale(), { month: "short" })}</small></span>
     <span class="cal-row-main"><span class="cal-row-title">${CAL_KINDS[e.kind].icon} ${esc(e.title)}</span><span class="muted small">${CAL_KINDS[e.kind].name}${e.subject ? ` · ${esc(e.subject)}` : ""}</span></span>
     <span class="cal-when${n <= 2 ? " soon" : ""}">${whenText(e.date)}</span>
   </button>`;
@@ -310,7 +310,7 @@ function wireCalendar(host) {
     const days = new Date(y, m, 0).getDate(), weeks = Math.ceil((lead + days) / 7);
     const today = todayYmd(), byDay = {};
     (calEvents || []).forEach((e) => (byDay[e.date] ||= []).push(e));
-    $(".cal-month", host).textContent = first.toLocaleDateString("en-AU", { month: "long", year: "numeric" });
+    $(".cal-month", host).textContent = first.toLocaleDateString(uiLocale(), { month: "long", year: "numeric" });
     let html = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => `<div class="cal-dow">${d}</div>`).join("");
     for (let i = 0; i < weeks * 7; i++) {
       const d = new Date(y, m - 1, 1 - lead + i), key = ymd(d), evs = byDay[key] || [];

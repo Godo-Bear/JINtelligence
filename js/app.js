@@ -111,8 +111,8 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const yesterdayStr = () => new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 // Dates are shown day/month/year, e.g. 13/11/2026.
-const fmtDate = (d) => new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" });
-const fmtDateTime = (d) => `${fmtDate(d)} ${new Date(d).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}`;
+const fmtDate = (d) => new Date(d).toLocaleDateString(uiLocale(), { day: "2-digit", month: "2-digit", year: "numeric" });
+const fmtDateTime = (d) => `${fmtDate(d)} ${new Date(d).toLocaleTimeString(uiLocale(), { hour: "numeric", minute: "2-digit" })}`;
 
 function shuffle(arr) {
   const a = [...arr];
@@ -1633,7 +1633,7 @@ const learnLevel = () => {
 const bankLevel = () => ["auto", "y7"].includes(learnLevel());
 // Added to AI prompts so answers suit the student. `fallback` is the level to use on "Any level" when the work
 // itself is pitched at a set level (e.g. the Year 7 questions and writing prompts on this site).
-function learnerLine(fallback = "") {
+function learnerLineBase(fallback = "") {
   const lvl = LEARN_LEVELS[learnLevel()];
   if (!lvl.who) return fallback
     ? `LEVEL: Pitch everything at about a ${fallback} level, unless the student has said (or it's clear) they're at a different level — then match theirs.`
@@ -3695,6 +3695,7 @@ function pageSettings(view) {
       <p class="muted small" style="margin:0;">To renew, pay <strong>${money(planInfo(me.planMonths, me.planName).price)} cash in hand</strong> to the site owner for another ${esc(planInfo(me.planMonths, me.planName).label)}. Accounts are unlocked by hand, so it may take a while.</p>
     </div>
 
+    ${languageCardHTML()}
     <div class="section-label">Your level</div>
     <div class="card stack">
       <p class="muted small" style="margin:0;">The AI can help with any subject at any level — from Prep to VCE, uni, TAFE and beyond. ${levelManaged() ? "Your level was chosen when you signed up (only the site owner can change it) so explanations, practice questions and feedback are pitched just right." : "Pick your level so explanations, practice questions and feedback are pitched just right, or leave it on <b>Any level</b> and the AI works it out from what you ask."}</p>
@@ -3864,6 +3865,8 @@ function pageSettings(view) {
     status.className = result.ok ? "small" : "small error";
     if (result.ok) $("#set-link-code", view).value = "";
   });
+
+  wireLanguageCard(view);
 
   $("#set-showpoints", view).addEventListener("change", async (e) => {
     const { error } = await sb.from("profiles").update({ show_points: e.target.checked }).eq("id", authUser.id);
