@@ -10,6 +10,7 @@ alter table public.profiles add column if not exists active_session text;
 alter table public.profiles add column if not exists allow_multi_device boolean not null default false;
 alter table public.profiles add column if not exists year_level text;
 alter table public.profiles add column if not exists trial_ends_at timestamptz;
+alter table public.profiles add column if not exists trial_requested boolean not null default false;
 
 create or replace function public.protect_profile_fields()
 returns trigger
@@ -42,8 +43,9 @@ begin
     new.allow_multi_device := false;
     -- a student picks their year level when they sign up; after that only an admin can change it (see the update branch below)
     if new.year_level is not null and new.year_level not in ('p2','y34','y56','y7','y8','y9','y10','y11','y12','uni','adult') then new.year_level := null; end if;
-    -- a free trial lasts 90 minutes from sign-up (set here by the server, so it can't be made longer); parent accounts are free anyway
-    if new.trial_ends_at is not null and coalesce(new.account_type, 'student') <> 'parent' then new.trial_ends_at := now() + interval '90 minutes'; else new.trial_ends_at := null; end if;
+    -- a free trial is asked for at sign-up; only an admin can start it (by setting trial_ends_at)
+    new.trial_ends_at := null;
+    new.trial_requested := coalesce(new.trial_requested, false) and coalesce(new.account_type, 'student') <> 'parent';
     new.deleted := false;
     return new;
   end if;
@@ -55,7 +57,8 @@ begin
   new.ai_bonus_pct := old.ai_bonus_pct;
   new.allow_multi_device := old.allow_multi_device;
   new.year_level := old.year_level;
-  new.trial_ends_at := old.trial_ends_at; -- only an admin can change it
+  new.trial_ends_at := old.trial_ends_at; -- only an admin can change these
+  new.trial_requested := old.trial_requested;
   new.account_type := old.account_type; -- chosen at sign-up; only an admin can change it (so a parent account can't become a student one)
   new.deleted := old.deleted;
   return new;

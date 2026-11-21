@@ -267,8 +267,9 @@ function planSaving(p) {
   if (!base || p.months <= base.months) return 0;
   return Math.round((base.price / base.months) * p.months - p.price);
 }
-// ---- Free trial: full access for 90 minutes from sign-up, then the account locks (paywall) until a plan is paid.
-// The end time is set by the database (supabase/free-trial.sql), so it can't be extended from the browser.
+// ---- Free trial: a student asks for one at sign-up; an admin approves it (Admin → Accounts → Start trial). The trial then
+// gives full access for 90 minutes and the account locks (paywall) until a plan is paid.
+// Only admins can set the trial end time (supabase/free-trial.sql), so it can't be changed from the browser.
 const TRIAL_MINUTES = 90;
 const trialUsedHere = () => !!store("apex-trial-used");
 let serverOffset = 0; // server time minus this device's clock, so changing the clock doesn't extend a trial
@@ -289,7 +290,7 @@ function renderPlanPicker() {
     const save = planSaving(p);
     const custom = p.title !== monthsLabel(p.months);
     return `<label class="choice plan${p.badge ? " has-badge" : ""}"><input type="radio" name="auth-plan" value="${esc(p.id)}"${p.id === checked ? " checked" : ""}><span>${p.badge ? `<em class="plan-badge">${esc(p.badge)}</em>` : ""}${custom ? `<strong class="plan-title">${esc(p.title)}</strong>` : ""}<b>${money(p.price)}</b><small>${monthsLabel(p.months)}${save > 0 ? ` · save ${money(save)}` : ""}</small>${p.description ? `<small class="plan-desc">${esc(p.description)}</small>` : ""}</span></label>`;
-  }).join("") + (trialUsedHere() ? "" : `<label class="choice plan trial-card" style="grid-column:1/-1;"><input type="radio" name="auth-plan" value="trial"${checked === "trial" ? " checked" : ""}><span><strong class="plan-title">Try it free for ${TRIAL_MINUTES / 60} hours</strong><small>No payment. Full access for ${TRIAL_MINUTES / 60} hours, then your account locks until you pay for a plan.</small></span></label>`);
+  }).join("") + (trialUsedHere() ? "" : `<label class="choice plan trial-card" style="grid-column:1/-1;"><input type="radio" name="auth-plan" value="trial"${checked === "trial" ? " checked" : ""}><span><strong class="plan-title">Ask for a free ${TRIAL_MINUTES / 60}-hour trial</strong><small>No payment. The site owner approves it, then you get full access for ${TRIAL_MINUTES / 60} hours before the account locks until you pay for a plan.</small></span></label>`);
 }
 // Every place the page spells the prices out (the Terms, the paywall) reads from the same list.
 function fillPlanTexts() {
@@ -615,7 +616,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
         const planMonths = pickedPlan ? pickedPlan.months : 4;
         const role = $('input[name="auth-role"]:checked').value;
         const base = { id: data.user.id, email, username: name, has_paid: false, agreed_to_terms: true };
-        await insertProfile(base, { plan_months: planMonths, ...(pickedPlan ? { plan_name: pickedPlan.title } : {}), account_type: role, ...(pickedLevel ? { year_level: pickedLevel } : {}), ...(wantsTrial ? { trial_ends_at: new Date(Date.now() + TRIAL_MINUTES * 60000).toISOString() } : {}) });
+        await insertProfile(base, { plan_months: planMonths, ...(pickedPlan ? { plan_name: pickedPlan.title } : {}), account_type: role, ...(pickedLevel ? { year_level: pickedLevel } : {}), ...(wantsTrial ? { trial_requested: true } : {}) });
         claimNewSession = true;
         await handleAuthenticatedUser(data.user);
       } else {
@@ -711,7 +712,7 @@ async function selectDroppingMissing(run, required, optional) {
 // Creates the profile row. The newer columns might not exist in the database yet, so if the insert fails it tries again
 // without the optional ones (year level first, then account type, then plan).
 async function insertProfile(base, extras) {
-  const order = ["trial_ends_at", "year_level", "account_type", "plan_name", "plan_months"];
+  const order = ["trial_requested", "year_level", "account_type", "plan_name", "plan_months"];
   const fields = { ...extras };
   for (let i = 0; i <= order.length; i++) {
     const { error } = await sb.from("profiles").insert({ ...base, ...fields });
@@ -728,7 +729,7 @@ async function handleAuthenticatedUser(user, retried = false) {
   let { data: profile, error } = await selectDroppingMissing(
     (cols) => sb.from("profiles").select(cols).eq("id", user.id).single(),
     ["username", "has_paid", "paid_until", "points", "xp", "progress", "friends", "is_admin"],
-    ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "plan_name", "account_type", "active_session", "allow_multi_device", "year_level", "show_points", "trial_ends_at"],
+    ["test_points", "is_teacher", "ai_bonus_pct", "plan_months", "plan_name", "account_type", "active_session", "allow_multi_device", "year_level", "show_points", "trial_ends_at", "trial_requested"],
   );
   if (error?.code === "PGRST116") {
     const chosen = storedPlan(user.email);
@@ -736,9 +737,9 @@ async function handleAuthenticatedUser(user, retried = false) {
     const role = store(roleKey(user.email)) || "student";
     const lvl = store(levelKeyFor(user.email)) || "";
     const wantTrial = !!store(`apex-trial-${String(user.email).toLowerCase()}`);
-    await insertProfile(row, { ...(wantTrial ? { trial_ends_at: new Date(Date.now() + TRIAL_MINUTES * 60000).toISOString() } : {}), plan_months: chosen.months, ...(chosen.name ? { plan_name: chosen.name } : {}), account_type: role, ...(role === "student" && LEARN_LEVELS[lvl] && lvl !== "auto" ? { year_level: lvl } : {}) });
-    if ((role === "parent" || wantTrial) && !retried) return handleAuthenticatedUser(user, true); // parent accounts are free; a trial starts now
-    return showPaywall(chosen.months, chosen.name);
+    await insertProfile(row, { ...(wantTrial ? { trial_requested: true } : {}), plan_months: chosen.months, ...(chosen.name ? { plan_name: chosen.name } : {}), account_type: role, ...(role === "student" && LEARN_LEVELS[lvl] && lvl !== "auto" ? { year_level: lvl } : {}) });
+    if (role === "parent" && !retried) return handleAuthenticatedUser(user, true); // parent accounts are free
+    return showPaywall(chosen.months, chosen.name, wantTrial ? "pending" : "");
   }
   if (error) { console.error("Apex: profile fetch failed —", error); return showPaywall(); }
 
@@ -747,7 +748,7 @@ async function handleAuthenticatedUser(user, retried = false) {
   await syncServerClock();
   const trialEnd = profile.trial_ends_at ? new Date(profile.trial_ends_at).getTime() : 0;
   const trialLive = !active && !profile.is_admin && trialEnd > serverNow();
-  if (!active && !freeParent && !trialLive) { const sp = storedPlan(user.email); return showPaywall(profile.plan_months || sp.months, profile.plan_name || sp.name, !!trialEnd); }
+  if (!active && !freeParent && !trialLive) { const sp = storedPlan(user.email); return showPaywall(profile.plan_months || sp.months, profile.plan_name || sp.name, trialEnd ? "ended" : profile.trial_requested ? "pending" : ""); }
 
   const claim = await claimDevice(profile, fresh);
   if (!claim.ok) { await logout(); showDeviceKickedMessage(); return; }
@@ -787,7 +788,7 @@ function startTrialWatch() {
   const bar = $("#trial-bar");
   const tick = () => {
     const left = me.trialEndsAt - serverNow();
-    if (left <= 0) { const m = me; me = null; showPaywall(m.planMonths, m.planName, true); return; }
+    if (left <= 0) { const m = me; me = null; showPaywall(m.planMonths, m.planName, "ended"); return; }
     const mins = Math.ceil(left / 60000);
     bar.innerHTML = `⏳ Free trial: <strong>${mins >= 60 ? Math.floor(mins / 60) + " h " + (mins % 60) + " min" : mins + " min"}</strong> left · <a href="#/settings">Choose a plan</a>`;
     bar.classList.remove("hidden");
@@ -795,9 +796,10 @@ function startTrialWatch() {
   tick();
   trialTimer = setInterval(tick, 15000);
 }
-function showPaywall(planMonths = 4, planName = "", trialEnded = false) {
+function showPaywall(planMonths = 4, planName = "", trial = "") { // trial: "" | "pending" (waiting for an admin) | "ended"
   stopTrialWatch();
-  $("#paywall-trial")?.classList.toggle("hidden", !trialEnded);
+  $("#paywall-trial")?.classList.toggle("hidden", trial !== "ended");
+  $("#paywall-pending")?.classList.toggle("hidden", trial !== "pending");
   $("#paywall-email").textContent = authUser?.email || "";
   $("#paywall-plan").textContent = planLine(planMonths, planName);
   showScreen("paywall");
@@ -880,9 +882,9 @@ function watchForUpdates() {
 // ---------------- Login notices ----------------
 // When the Terms and Conditions change: bump TERMS_VERSION and update TERMS_CHANGES.
 // Everyone then sees the "terms have changed" pop-up once and must agree.
-const TERMS_VERSION = "2026-11-21a";
+const TERMS_VERSION = "2026-11-21b";
 const TERMS_CHANGES = [
-  "New — free trial: when you sign up you can choose a free 1.5-hour trial instead of a plan. After 1.5 hours the account locks until you pay for a plan (cash in hand to the site owner). Each device gets one trial.",
+  "New — free trial: when you sign up you can ask for a free 1.5-hour trial instead of a plan. The site owner approves it; the 1.5 hours start when they do. After that the account locks until you pay for a plan (cash in hand to the site owner). Each device can ask once.",
   "New name: Apex Academy is now called JINtelligence. Everything else (your account, progress and payments) stays the same.",
   "New — ownership: JINtelligence (its name, logos, design, code, lessons and questions) belongs to Jayden Narayan. You must not copy it, re-publish it or claim it as your own.",
   "New — calendar: put your tests, assignments and reminders on the calendar (Notes & calendar). It's saved to your account, and the AI can see what's coming up so it can help you prepare (you can turn this off).",
@@ -4100,7 +4102,12 @@ function pageAdmin(view) {
 
   function statusTag(a) {
     if (a.deleted) return `<span class="tag bad">Deleted</span>`;
-    if (!a.has_paid) return `<span class="tag bad">Not paid</span>`;
+    if (!a.has_paid) {
+      const te = a.trial_ends_at ? new Date(a.trial_ends_at) : null;
+      if (te && te > new Date()) return `<span class="tag good">Trial until ${te.toLocaleTimeString(uiLocale(), { hour: "numeric", minute: "2-digit" })}</span>`;
+      if (a.trial_requested && !te) return `<span class="tag" style="background:#fff4d6;color:#5a4300;">Trial requested</span>`;
+      return `<span class="tag bad">${te ? "Trial ended" : "Not paid"}</span>`;
+    }
     if (!a.paid_until) return `<span class="tag good">Paid</span>`;
     const until = new Date(a.paid_until);
     return until > new Date()
@@ -4130,11 +4137,13 @@ function pageAdmin(view) {
             <div class="muted small">${esc(a.email)} · ${a.points || 0} pts · ${a.xp || 0} XP${a.game_data ? ` · 🏅 ${Object.keys(a.game_data.badges || {}).length} badges` : ""} · ${attemptedOf(a.progress)} answered · seen ${timeAgo(a.last_seen)}</div>
           </div>
           ${statusTag(a)}
+          ${a.trial_requested && !a.trial_ends_at && !a.has_paid && !a.deleted ? btn("start-trial", "✅ Start trial", "") : ""}
           <button class="btn ghost sm" data-toggle="${a.id}">${open.has(a.id) ? "Close" : "Manage"}</button>
           ${open.has(a.id) ? `
             <div class="manage-panel">
               <div class="manage-group"><div class="manage-title">Plan &amp; time</div><div class="manage-btns">
                 ${btn("renew", "Add / take months…")}
+                ${btn("start-trial", a.trial_ends_at ? "Restart 1.5 h trial" : "Start 1.5 h trial")}
                 ${btn("give", giving.has(a.id) ? "Close gifts" : "🎁 Give / take", "")}
               </div></div>
               <div class="manage-group"><div class="manage-title">Points &amp; XP</div><div class="manage-btns">
@@ -4330,6 +4339,11 @@ function pageAdmin(view) {
       case "set-points": { const n = askNumber(`Set points for ${name}:`); if (n !== null) update = { points: n }; break; }
       case "add-xp": update = { xp: (a.xp || 0) + 10 }; break;
       case "set-xp": { const n = askNumber(`Set XP for ${name}:`); if (n !== null) update = { xp: n }; break; }
+      case "start-trial": {
+        if (a.has_paid) { alert(`${name} is already paid up.`); break; }
+        if (confirm(`Start a ${TRIAL_MINUTES / 60}-hour free trial for ${name}? It begins now.`)) update = { trial_ends_at: new Date(serverNow() + TRIAL_MINUTES * 60000).toISOString(), trial_requested: false, deleted: false };
+        break;
+      }
       case "renew": {
         // Positive = add months (from the later of today or the current expiry); negative = take months off the current expiry.
         const active = a.paid_until && new Date(a.paid_until) > new Date();
@@ -4409,7 +4423,7 @@ function pageAdmin(view) {
     const { data, error } = await selectDroppingMissing(
       (cols) => sb.from("profiles").select(cols),
       ["id", "username", "email", "points", "xp", "has_paid", "paid_until", "is_admin", "progress"],
-      ["is_teacher", "ai_bonus_pct", "plan_months", "plan_name", "account_type", "allow_multi_device", "year_level", "last_seen", "deleted", "game_data"],
+      ["is_teacher", "ai_bonus_pct", "plan_months", "plan_name", "account_type", "allow_multi_device", "year_level", "last_seen", "deleted", "game_data", "trial_ends_at", "trial_requested"],
     );
     if (error) { $("#accts", view).innerHTML = `<p class="muted">Couldn't load accounts.</p>`; return; }
     accounts = (data || []).sort((x, y) => (!!x.deleted - !!y.deleted) || (y.points || 0) - (x.points || 0));
