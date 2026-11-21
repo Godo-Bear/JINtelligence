@@ -236,22 +236,43 @@ const AI_TRIES = 3;
 // lasts, a price, an optional badge ("Best value") and an on/off switch. They live in the "plan_offers" table
 // (see supabase/plan-offers.sql). Until that table has plans, these built-in ones are used.
 const DEFAULT_PLANS = [
-  { id: "1", title: "1 month", description: "", months: 1, price: 7, badge: "", active: true, sort: 0 },
-  { id: "4", title: "4 months", description: "", months: 4, price: 15, badge: "", active: true, sort: 1 },
+  { id: "1", title: "1 month", description: "", months: 1, amount: 1, unit: "months", price: 7, badge: "", active: true, sort: 0 },
+  { id: "4", title: "4 months", description: "", months: 4, amount: 4, unit: "months", price: 15, badge: "", active: true, sort: 1 },
 ];
 let ALL_PLANS = DEFAULT_PLANS.map((p) => ({ ...p })); // every plan, so accounts on a switched-off plan still resolve
 let PLAN_LIST = ALL_PLANS.slice();                      // the plans people can choose right now
 let PLANS_FROM_DB = false;
 const monthsLabel = (m) => `${m} month${m === 1 ? "" : "s"}`;
+// A plan can last a number of days, weeks or months.
+const PLAN_UNITS = { days: { one: "day", days: 1 }, weeks: { one: "week", days: 7 }, months: { one: "month", days: 30.44 } };
+const durLabel = (n, unit = "months") => `${n} ${(PLAN_UNITS[unit] || PLAN_UNITS.months).one}${n === 1 ? "" : "s"}`;
+const planDays = (p) => p.amount * (PLAN_UNITS[p.unit] || PLAN_UNITS.months).days;
+// "months" kept on every plan is a rough whole-month size (at least 1); it's how the account remembers its plan.
+const roughMonths = (n, unit) => Math.max(1, Math.round((n * (PLAN_UNITS[unit] || PLAN_UNITS.months).days) / 30.44));
+function addTime(d, n, unit = "months") {
+  const x = new Date(d);
+  if (unit === "days") x.setDate(x.getDate() + n);
+  else if (unit === "weeks") x.setDate(x.getDate() + 7 * n);
+  else x.setMonth(x.getMonth() + n);
+  return x.toISOString();
+}
+// "7 days", "2 weeks", "-1 month" or just "3" (months) → { n, unit }, or null if it can't be read.
+function parseDuration(text) {
+  const m = String(text || "").trim().toLowerCase().match(/^(-?\d+)\s*(d|day|days|w|wk|wks|week|weeks|m|mo|mos|month|months)?$/);
+  if (!m) return null;
+  const c = (m[2] || "m")[0];
+  return { n: parseInt(m[1], 10), unit: c === "d" ? "days" : c === "w" ? "weeks" : "months" };
+}
 const money = (n) => `$${Number(n) % 1 ? Number(n).toFixed(2) : Number(n)}`;
 function setPlans(rows) {
   const list = (rows || []).map((r) => ({
     id: String(r.id ?? ""), title: String(r.title || "").trim(), description: String(r.description || "").trim(),
     months: parseInt(r.months, 10), price: Number(r.price), badge: String(r.badge || "").trim(),
+    unit: PLAN_UNITS[r.unit] ? r.unit : "months", amount: parseInt(r.amount ?? r.months, 10),
     active: r.active !== false, sort: Number(r.sort_order) || 0,
-  })).filter((p) => p.id && p.months >= 1 && p.months <= 120 && isFinite(p.price) && p.price >= 0)
-    .map((p) => ({ ...p, title: p.title || monthsLabel(p.months) }))
-    .sort((x, y) => x.sort - y.sort || x.months - y.months);
+  })).filter((p) => p.id && p.amount >= 1 && p.amount <= 3650 && isFinite(p.price) && p.price >= 0)
+    .map((p) => ({ ...p, months: p.unit === "months" ? p.amount : roughMonths(p.amount, p.unit), title: p.title || durLabel(p.amount, p.unit) }))
+    .sort((x, y) => x.sort - y.sort || planDays(x) - planDays(y));
   PLANS_FROM_DB = list.length > 0;
   ALL_PLANS = list.length ? list : DEFAULT_PLANS.map((p) => ({ ...p }));
   PLAN_LIST = ALL_PLANS.filter((p) => p.active);
@@ -265,21 +286,21 @@ function findPlan(months, name) {
 }
 const planInfo = (months, name) => {
   const p = findPlan(months, name);
-  return { id: p.id, title: p.title, months: p.months, price: p.price, label: monthsLabel(p.months), description: p.description, badge: p.badge };
+  return { id: p.id, title: p.title, months: p.months, amount: p.amount, unit: p.unit, price: p.price, label: durLabel(p.amount, p.unit), description: p.description, badge: p.badge };
 };
 const planText = (months, name) => { const p = planInfo(months, name); return `${money(p.price)} for ${p.label}`; };
 // "Starter — $7 for 1 month" (the title is left out when it just says the length)
 const planLine = (months, name) => { const p = planInfo(months, name); return `${p.title !== p.label ? `${p.title} — ` : ""}${planText(months, name)}`; };
 // "$7 for 1 month or $15 for 4 months" (with more plans: "A, B or C")
 function planListText(aud = false) {
-  const parts = PLAN_LIST.map((p) => `${p.title !== monthsLabel(p.months) ? `${p.title}: ` : ""}${money(p.price)}${aud ? " AUD" : ""} for ${monthsLabel(p.months)}`);
+  const parts = PLAN_LIST.map((p) => `${p.title !== durLabel(p.amount, p.unit) ? `${p.title}: ` : ""}${money(p.price)}${aud ? " AUD" : ""} for ${durLabel(p.amount, p.unit)}`);
   return parts.length < 2 ? parts.join("") : `${parts.slice(0, -1).join(", ")} or ${parts[parts.length - 1]}`;
 }
 // How much a longer plan saves compared with paying for the shortest plan again and again.
 function planSaving(p) {
-  const base = [...PLAN_LIST].sort((x, y) => x.months - y.months)[0];
-  if (!base || p.months <= base.months) return 0;
-  return Math.round((base.price / base.months) * p.months - p.price);
+  const base = [...PLAN_LIST].sort((x, y) => planDays(x) - planDays(y))[0];
+  if (!base || planDays(p) <= planDays(base)) return 0;
+  return Math.round((base.price / planDays(base)) * planDays(p) - p.price);
 }
 // ---- Free trial: a student asks for one at sign-up; an admin approves it (Admin → Accounts → Start trial). The trial then
 // gives full access for one day and the account locks (paywall) until a plan is paid.
@@ -302,8 +323,8 @@ function renderPlanPicker() {
   box.style.gridTemplateColumns = `repeat(${Math.min(PLAN_LIST.length, 3)}, 1fr)`;
   box.innerHTML = PLAN_LIST.map((p) => {
     const save = planSaving(p);
-    const custom = p.title !== monthsLabel(p.months);
-    return `<label class="choice plan${p.badge ? " has-badge" : ""}"><input type="radio" name="auth-plan" value="${esc(p.id)}"${p.id === checked ? " checked" : ""}><span>${p.badge ? `<em class="plan-badge">${esc(p.badge)}</em>` : ""}${custom ? `<strong class="plan-title">${esc(p.title)}</strong>` : ""}<b>${money(p.price)}</b><small>${monthsLabel(p.months)}${save > 0 ? ` · save ${money(save)}` : ""}</small>${p.description ? `<small class="plan-desc">${esc(p.description)}</small>` : ""}</span></label>`;
+    const custom = p.title !== durLabel(p.amount, p.unit);
+    return `<label class="choice plan${p.badge ? " has-badge" : ""}"><input type="radio" name="auth-plan" value="${esc(p.id)}"${p.id === checked ? " checked" : ""}><span>${p.badge ? `<em class="plan-badge">${esc(p.badge)}</em>` : ""}${custom ? `<strong class="plan-title">${esc(p.title)}</strong>` : ""}<b>${money(p.price)}</b><small>${durLabel(p.amount, p.unit)}${save > 0 ? ` · save ${money(save)}` : ""}</small>${p.description ? `<small class="plan-desc">${esc(p.description)}</small>` : ""}</span></label>`;
   }).join("") + (trialUsedHere() ? "" : `<label class="choice plan trial-card" style="grid-column:1/-1;"><input type="radio" name="auth-plan" value="trial"${checked === "trial" ? " checked" : ""}><span><strong class="plan-title">Ask for a free 1-day trial</strong><small>No payment. The site owner approves it, then you get full access for 1 day before the account locks until you pay for a plan.</small></span></label>`);
 }
 // Every place the page spells the prices out (the Terms, the paywall) reads from the same list.
@@ -312,7 +333,8 @@ function fillPlanTexts() {
 }
 async function loadPlans() {
   try {
-    const { data, error } = await sb.from("plan_offers").select("id, title, description, months, price, badge, active, sort_order").order("sort_order");
+    let { data, error } = await sb.from("plan_offers").select("id, title, description, months, amount, unit, price, badge, active, sort_order").order("sort_order");
+    if (error) ({ data, error } = await sb.from("plan_offers").select("id, title, description, months, price, badge, active, sort_order").order("sort_order")); // the days/weeks SQL hasn't been run yet
     if (!error && data?.length) setPlans(data);
   } catch (e) { /* keep the built-in plans */ }
   renderPlanPicker();
@@ -4061,7 +4083,7 @@ function pageAdmin(view) {
 
     <div class="section-label">💲 Plans &amp; prices</div>
     <div class="card stack">
-      <p class="muted small" style="margin:0;">Make the plans people can choose when they sign up. Give each plan a title, a short description, how many months it lasts and a price (and a badge like "Best value" if you want). Turn a plan off to hide it from the sign-up page without deleting it. Parent accounts are free.</p>
+      <p class="muted small" style="margin:0;">Make the plans people can choose when they sign up. Give each plan a title, a short description, how long it lasts (days, weeks or months) and a price (and a badge like "Best value" if you want). Turn a plan off to hide it from the sign-up page without deleting it. Parent accounts are free.</p>
       <div id="plans-list" class="plan-admin-list"></div>
       <div class="plan-admin-new">
         <div class="manage-title">➕ Add a new plan</div>
@@ -4190,7 +4212,7 @@ function pageAdmin(view) {
           ${open.has(a.id) ? `
             <div class="manage-panel">
               <div class="manage-group"><div class="manage-title">Plan &amp; time</div><div class="manage-btns">
-                ${btn("renew", "Add / take months…")}
+                ${btn("renew", "Add / take time…")}
                 ${btn("start-trial", a.trial_ends_at ? "Restart 1-day trial" : "Start 1-day trial")}
                 ${btn("give", giving.has(a.id) ? "Close gifts" : "🎁 Give / take", "")}
               </div></div>
@@ -4224,11 +4246,11 @@ function pageAdmin(view) {
 
   // ----- Plans & prices -----
   const planStatus = (text, bad) => { const el = $("#plan-status", view); el.textContent = text; el.className = bad ? "small error" : "small muted"; };
-  const planSqlHint = "Couldn't save — the plans table isn't set up yet. Run the plans SQL (supabase/plan-offers.sql) once, then try again.";
+  const planSqlHint = "Couldn't save — the plans table isn't set up yet (or needs the days/weeks update). Run the plans SQL (supabase/plan-offers.sql) once, then try again.";
   const planFormHTML = (p = {}) => `
     <div class="plan-fields">
       <label>Title<input type="text" maxlength="40" data-pf="title" value="${esc(p.title || "")}" placeholder="e.g. Term pass"></label>
-      <label>Months<input type="number" min="1" max="120" step="1" data-pf="months" value="${p.months ?? ""}" placeholder="3"></label>
+      <label>Lasts<span class="row" style="gap:6px;flex-wrap:nowrap;"><input type="number" min="1" max="3650" step="1" data-pf="amount" value="${p.amount ?? ""}" placeholder="3" style="min-width:0;"><select data-pf="unit" aria-label="Days, weeks or months">${Object.keys(PLAN_UNITS).map((u) => `<option value="${u}"${(p.unit || "months") === u ? " selected" : ""}>${u}</option>`).join("")}</select></span></label>
       <label>Price ($)<input type="number" min="0" max="10000" step="0.5" data-pf="price" value="${p.price ?? ""}" placeholder="20"></label>
       <label class="wide">Description<input type="text" maxlength="140" data-pf="description" value="${esc(p.description || "")}" placeholder="e.g. One school term of practice"></label>
       <label>Badge<input type="text" maxlength="24" data-pf="badge" value="${esc(p.badge || "")}" placeholder="e.g. Best value"></label>
@@ -4237,12 +4259,14 @@ function pageAdmin(view) {
     </div>`;
   const readPlanForm = (box) => {
     const g = (k) => $(`[data-pf="${k}"]`, box);
-    return { title: g("title").value.trim(), months: parseInt(g("months").value, 10), price: parseFloat(g("price").value),
+    const amount = parseInt(g("amount").value, 10), unit = g("unit").value;
+    return { title: g("title").value.trim(), amount, unit, months: roughMonths(amount, unit), price: parseFloat(g("price").value),
       description: g("description").value.trim(), badge: g("badge").value.trim(), sort_order: parseInt(g("sort").value, 10) || 0, active: g("active").checked };
   };
   const checkPlan = (v) => {
     if (!v.title) return "Give the plan a title.";
-    if (!(v.months >= 1 && v.months <= 120)) return "Months must be a whole number from 1 to 120.";
+    if (!(v.amount >= 1 && v.amount <= 3650)) return "How long it lasts must be a whole number, like 7 days, 2 weeks or 3 months.";
+    if (v.unit === "months" && v.amount > 120) return "Up to 120 months.";
     if (!(v.price >= 0 && v.price <= 10000)) return "Enter a price from $0 to $10,000.";
     return "";
   };
@@ -4250,7 +4274,7 @@ function pageAdmin(view) {
     $("#plans-list", view).innerHTML = (PLANS_FROM_DB ? "" : `<div class="banner info">These are the built-in plans. Run <b>supabase/plan-offers.sql</b> once to be able to change them and add your own.</div>`) + ALL_PLANS.map((p) => `
       <div class="plan-admin${p.active ? "" : " off"}" data-plan-box="${esc(p.id)}">
         <div class="row between"><strong>${esc(p.title)}${p.badge ? ` <span class="tag good">${esc(p.badge)}</span>` : ""}${p.active ? "" : ` <span class="tag">hidden</span>`}</strong>
-          <span class="muted small">${esc(money(p.price))} for ${esc(monthsLabel(p.months))}${planSaving(p) > 0 ? ` · saves ${esc(money(planSaving(p)))}` : ""}</span></div>
+          <span class="muted small">${esc(money(p.price))} for ${esc(durLabel(p.amount, p.unit))}${planSaving(p) > 0 ? ` · saves ${esc(money(planSaving(p)))}` : ""}</span></div>
         ${planFormHTML(p)}
         <div class="row" style="gap:8px;"><button class="btn secondary sm" type="button" data-plan-save="${esc(p.id)}">Save</button><button class="btn ghost sm" type="button" data-plan-del="${esc(p.id)}">Delete</button></div>
       </div>`).join("");
@@ -4336,7 +4360,7 @@ function pageAdmin(view) {
     if (picked.size && giveWho !== "ticked") $('#give-who [data-who="ticked"]', view).click();
   });
 
-  const monthsFrom = (d, n) => addMonths(d, n);
+  const monthsFrom = (d, n, unit = "months") => addTime(d, n, unit);
   // A small dialog to pick a year level for one student. Resolves to a level key, null ("not set") or undefined (cancelled).
   const askLevel = (who, current) => new Promise((resolve) => {
     const box = document.createElement("div");
@@ -4396,20 +4420,22 @@ function pageAdmin(view) {
         // Positive = add months (from the later of today or the current expiry); negative = take months off the current expiry.
         const active = a.paid_until && new Date(a.paid_until) > new Date();
         const from = active ? a.paid_until : new Date();
-        const n = askNumber(`How many months should ${name} get? Use a minus number to take months away, e.g. -1. (their plan is ${planInfo(a.plan_months, a.plan_name).title})`, planInfo(a.plan_months, a.plan_name).months);
-        if (n === null) break;
-        if (n === 0 || Math.abs(n) > 120) { alert("Enter a number of months between 1 and 120 (or -1 to -120 to take months away)."); break; }
+        const pi = planInfo(a.plan_months, a.plan_name);
+        const ans = prompt(`How much time should ${name} get? Type a number with days, weeks or months, e.g. 7 days, 2 weeks or 3 months (a plain number means months). Use a minus to take time away, e.g. -1 week. (their plan is ${pi.title})`, `${pi.amount} ${pi.unit}`);
+        if (ans === null) break;
+        const d = parseDuration(ans);
+        if (!d || d.n === 0 || Math.abs(d.n) > (d.unit === "months" ? 120 : 3650)) { alert("Please type something like 7 days, 2 weeks or 3 months (or -7 days to take time away)."); break; }
+        const n = d.n, unit = d.unit, what = durLabel(Math.abs(n), unit);
         if (n > 0) {
-          const until = monthsFrom(from, n);
-          if (confirm(`Add ${n} month${n === 1 ? "" : "s"} for ${name}, until ${fmtDate(until)}?`)) update = { has_paid: true, paid_until: until, deleted: false };
+          const until = monthsFrom(from, n, unit);
+          if (confirm(`Add ${what} for ${name}, until ${fmtDate(until)}?`)) update = { has_paid: true, paid_until: until, deleted: false };
           break;
         }
-        const k = -n;
-        if (!a.paid_until) { alert(`${name} has no paid time to take months from.`); break; }
-        const until = monthsFrom(a.paid_until, n);
+        if (!a.paid_until) { alert(`${name} has no paid time to take time from.`); break; }
+        const until = monthsFrom(a.paid_until, n, unit);
         if (new Date(until) <= new Date()) {
-          if (confirm(`Taking ${k} month${k === 1 ? "" : "s"} leaves nothing for ${name}, so their access will be paused now. Continue?`)) update = { has_paid: false, paid_until: until };
-        } else if (confirm(`Take ${k} month${k === 1 ? "" : "s"} off ${name}? Their time will end on ${fmtDate(until)}.`)) update = { paid_until: until };
+          if (confirm(`Taking ${what} leaves nothing for ${name}, so their access will be paused now. Continue?`)) update = { has_paid: false, paid_until: until };
+        } else if (confirm(`Take ${what} off ${name}? Their time will end on ${fmtDate(until)}.`)) update = { paid_until: until };
         break;
       }
       case "toggle-admin":
@@ -4442,7 +4468,7 @@ function pageAdmin(view) {
         if (confirm(`Reset all points and progress for ${name}? This can't be undone.`)) update = { points: 0, progress: {} };
         break;
       case "kick":
-        if (confirm(`${a.has_paid ? "Suspend" : "Reinstate"} ${name}?`)) update = a.has_paid ? { has_paid: false } : { has_paid: true, paid_until: monthsFrom(new Date(), planInfo(a.plan_months, a.plan_name).months) };
+        if (confirm(`${a.has_paid ? "Suspend" : "Reinstate"} ${name}?`)) update = a.has_paid ? { has_paid: false } : { has_paid: true, paid_until: monthsFrom(new Date(), planInfo(a.plan_months, a.plan_name).amount, planInfo(a.plan_months, a.plan_name).unit) };
         break;
       case "delete":
         if (!confirm(`Delete ${name}'s account? They'll be removed from the leaderboard and lose access.`)) break;
