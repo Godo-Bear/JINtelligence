@@ -201,6 +201,18 @@ function cleanTutorAnswer(text) {
     .trim();
 }
 
+// The AI service (Google) counts its daily limit in Pacific time and resets at midnight there. When is that for this person?
+function aiResetText() {
+  try {
+    const now = new Date();
+    const la = (d) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "numeric", hour12: false }).formatToParts(d).reduce((o, x) => (o[x.type] = x.value, o), {});
+    let t = new Date(Math.ceil(now.getTime() / 60000) * 60000);
+    for (let i = 0; i < 1500; i++) { const p = la(t); if (+p.hour % 24 === 0 && +p.minute === 0) break; t = new Date(t.getTime() + 60000); }
+    const mins = Math.round((t - now) / 60000);
+    const when = t.toLocaleTimeString(uiLocale(), { hour: "numeric", minute: "2-digit" });
+    return `It resets at about ${when} (${mins >= 60 ? "in about " + Math.round(mins / 60) + " hours" : "in " + mins + " minutes"}).`;
+  } catch (e) { return "It resets overnight."; }
+}
 // Why an AI request failed, in words a student understands, and whether trying again could help.
 async function aiErrorInfo(err) {
   const status = err?.context?.status || 0;
@@ -211,6 +223,7 @@ async function aiErrorInfo(err) {
   if (status === 401) return { retry: false, message: "Your login has run out. Refresh the page (and log in again if it asks), then try again." };
   if (/too long/i.test(text)) return { retry: false, message: "That's too much for the AI in one go. Remove a file or ask for a bit less, then try again." };
   if (status === 504 || status === 546 || /timed? ?out|time limit|WORKER_LIMIT/i.test(text)) return { retry: false, message: "The AI took too long to answer. Try asking for fewer questions at once (like 5), then ask for more." };
+  if (/AI_LIMIT_REACHED/.test(text)) return { retry: false, message: `The AI's limit for today has been reached. ${aiResetText()} Please try again after that.` };
   if (/AI key was rejected|model couldn't be found|HTTP 4(01|03|04)/i.test(text)) return { retry: false, message: "The AI isn't set up properly on the site right now. Please tell the site owner. (" + text.replace(/\s+/g, " ").trim().slice(0, 150) + ")" };
   if (status === 429 || /busy|overload|rate.?limit|quota|exhausted/i.test(text)) return { retry: true, message: "The AI is really busy right now (lots of people are using it). Wait about 30 seconds, then try again." };
   if (/stuck/i.test(text)) return { retry: true, message: "The AI got stuck on that one. Try asking in a different way, or for fewer questions at once." };
@@ -317,12 +330,12 @@ const storedPlan = (email) => { const v = store(planKey(email)); return v && typ
 const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x.toISOString(); };
 
 // ---------------- AI daily usage limits (tutor chat + AI-made tests; admins are exempt) ----------------
-const AI_LIMITS = { tutor: 100, aitest: 15 };
+const AI_LIMITS = { tutor: 40, aitest: 6 };
 // The base daily limit, boosted by whatever extra % an admin has granted this account (Admin → Manage →
 // "AI bonus"). 50% bonus on 40 tutor messages = 60; rounds down so a bonus never grants a fraction of a use.
 // Free-trial accounts get a small allowance so the AI (which costs money) can't be used up by throwaway accounts.
-const AI_LIMITS_TRIAL = { tutor: 15, aitest: 2 };
-const aiLimitFor = (kind) => Math.floor((me.trialEndsAt ? AI_LIMITS_TRIAL : AI_LIMITS)[kind] * (1 + (me.aiBonusPct || 0) / 100));
+const AI_LIMITS_TRIAL = { tutor: 10, aitest: 1 };
+const aiLimitFor = (kind) => Math.max(0, Math.floor((me.trialEndsAt ? AI_LIMITS_TRIAL : AI_LIMITS)[kind] * (1 + (me.aiBonusPct || 0) / 100)));
 const aiUsageDay = () => new Date().toISOString().slice(0, 10);
 // Reads today's usage row for the current user. Treated as 0/0 if there's no row yet, or on any error
 // (fails open — a network hiccup shouldn't lock a student out of the AI).
@@ -3962,7 +3975,7 @@ function pageSettings(view) {
       box.innerHTML = `
         <div class="row between"><span>AI tutor messages</span><strong>${usage.tutor} / ${aiLimitFor("tutor")}</strong></div>
         <div class="row between"><span>AI-made tests</span><strong>${usage.aitest} / ${aiLimitFor("aitest")}</strong></div>
-        ${me.aiBonusPct ? `<p class="small" style="margin:0; color:var(--accent);">🎁 You have a +${me.aiBonusPct}% bonus from the site owner.</p>` : ""}
+        ${me.aiBonusPct ? `<p class="small" style="margin:0; color:var(--accent);">${me.aiBonusPct > 0 ? `🎁 You have a +${me.aiBonusPct}% bonus` : `Your allowance is ${me.aiBonusPct}%`} set by the site owner.</p>` : ""}
         <p class="muted small" style="margin:0;">Resets at midnight. The question bank (Practice and Test → Pick topics) doesn't count towards this.</p>`;
     });
   }
@@ -4162,7 +4175,7 @@ function pageAdmin(view) {
               </div></div>
               <div class="manage-group"><div class="manage-title">Access &amp; AI</div><div class="manage-btns">
                 ${btn("toggle-multi", a.allow_multi_device ? "Multi-device: ON" : "Allow multiple devices")}
-                ${btn("set-ai-bonus", `AI bonus${a.ai_bonus_pct ? ` (+${a.ai_bonus_pct}%)` : "…"}`)}
+                ${btn("set-ai-bonus", `AI usage${a.ai_bonus_pct ? ` (${a.ai_bonus_pct > 0 ? "+" : ""}${a.ai_bonus_pct}%)` : "…"}`)}
               </div></div>
               <div class="manage-group danger"><div class="manage-title">Danger zone</div><div class="manage-btns">
                 ${btn("reset", "Reset progress", "ghost")}
@@ -4389,8 +4402,8 @@ function pageAdmin(view) {
         if (confirm(`${a.is_teacher ? "Remove teacher from" : a.account_type === "teacher" ? "Verify as a teacher:" : "Make teacher:"} ${name}?`)) update = { is_teacher: !a.is_teacher };
         break;
       case "set-ai-bonus": {
-        const n = askNumber(`Extra AI usage for ${name}, as a % on top of the normal daily limit (0 for none, e.g. 50 for +50%):`);
-        if (n !== null) update = { ai_bonus_pct: Math.max(0, Math.min(500, n)) };
+        const n = askNumber(`How much AI can ${name} use each day, compared with normal? Type a % change: 0 = normal, 100 = double, 50 = one and a half times, -50 = half, -100 = none. (Normal is ${AI_LIMITS.tutor} tutor messages and ${AI_LIMITS.aitest} AI tests a day; free trials get ${AI_LIMITS_TRIAL.tutor} and ${AI_LIMITS_TRIAL.aitest}.)`);
+        if (n !== null) update = { ai_bonus_pct: Math.max(-100, Math.min(1000, n)) };
         break;
       }
       case "reset":
