@@ -76,7 +76,7 @@ function bestText(mode, v, s) {
 }
 
 // Topics for a subject ("general" = all), then every bank question in them that suits a game.
-const subjectTopics = (subject) => QUIZ_TOPICS.filter((t) => subject === "general" || t.subject === subject);
+const subjectTopics = (subject) => QUIZ_TOPICS.filter((t) => (subject === "general" || t.subject === subject) && (typeof topicAllowed !== "function" || topicAllowed(t)));
 function gamePool(s) {
   const topics = subjectTopics(s.subject).filter((t) => !s.topics?.length || s.topics.includes(t.id));
   const diff = s.mode === "clock" && s.diff && s.diff !== "mixed" ? +s.diff : 0;

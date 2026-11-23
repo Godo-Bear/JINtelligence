@@ -169,7 +169,7 @@ function aiTestMode(view, host) {
       const history = chatHistory(aiTest.log.slice(0, -2));
       if (aiTest.files.some((f) => f.status === "reading")) throw Object.assign(new Error("files still loading"), { userMessage: "Your files are still loading — wait a moment, then send again." });
       await Promise.all([loadMemory(), ensureCalendar()]);
-      const raw = await askTutorRaw(await withUploads(`You are a friendly tutor (based in Victoria, Australia) building a practice test WITH a student in a chat. The test can be on ANY subject or learning topic, at any level: school subjects from Prep to VCE, uni or TAFE topics, languages, coding, music, general knowledge, or anything school-appropriate they're interested in.
+      const raw = await askTutorRaw(await withUploads(`You are a friendly tutor (based in Victoria, Australia) building a practice test WITH a student in a chat. The test can be on ANY subject or learning topic, at any level: school subjects from Prep to VCE, uni or TAFE topics, languages, coding, music, general knowledge, or anything school-appropriate they're interested in. ${typeof FOLLOW_ORDERS === "string" ? FOLLOW_ORDERS : ""}
 ${testLevelLine()}
 ${testDiffLine()}
 ${calendarPrompt()}${memoryPrompt()}${flaggedPrompt("test")}

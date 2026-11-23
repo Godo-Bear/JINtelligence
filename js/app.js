@@ -96,6 +96,15 @@ const MATHS_TOPICS = YEAR_LEVELS.flatMap((y) => y.topics);
 const ALL_TOPICS = [...MATHS_TOPICS, ...ENGLISH_TOPICS, ...SCIENCE_TOPICS, ...HISTORY_TOPICS, ...GEOGRAPHY_TOPICS];
 const QUIZ_TOPICS = ALL_TOPICS.filter((t) => !t.special);
 const findTopic = (id) => ALL_TOPICS.find((t) => t.id === id);
+// A student only gets the maths for the year level they chose at sign-up (the AI tutor and AI tests follow it too).
+// Levels with no maths topics of their own get the nearest set. Admins, and levels like university or adult, see everything.
+const MATHS_YEAR_FOR_LEVEL = { p2: "7", y34: "7", y56: "7", y7: "7", y8: "8", y9: "9", y10: "10", y11: "vce", y12: "vce" };
+function myMathsYear() {
+  if (typeof levelManaged !== "function" || !levelManaged()) return null;
+  return MATHS_YEAR_FOR_LEVEL[me.yearLevel || "y7"] || null; // null = everything
+}
+const topicAllowed = (t) => { const y = myMathsYear(); return !y || t.subject !== "maths" || t.yearId === y; };
+const visibleQuizTopics = () => QUIZ_TOPICS.filter(topicAllowed);
 
 function pointsFor(q, topic) {
   const mult = topic.yearId ? yearMultiplier(topic.yearId) : 1;
@@ -1192,12 +1201,12 @@ async function loadLeaderboard() {
 
 // ---------------- Home ----------------
 function suggestTopic() {
-  const attempted = QUIZ_TOPICS.filter((t) => topicStats(t.id).attempted >= 5);
+  const attempted = visibleQuizTopics().filter((t) => topicStats(t.id).attempted >= 5);
   const weak = attempted.filter((t) => mastery(t.id) < 70).sort((a, b) => mastery(a.id) - mastery(b.id))[0];
   if (weak) return { topic: weak, reason: `Your accuracy here is ${mastery(weak.id)}% — a bit more practice will help.` };
-  const fresh = QUIZ_TOPICS.find((t) => topicStats(t.id).attempted === 0);
+  const fresh = visibleQuizTopics().find((t) => topicStats(t.id).attempted === 0);
   if (fresh) return { topic: fresh, reason: "You haven't tried this topic yet." };
-  const lowest = [...QUIZ_TOPICS].sort((a, b) => mastery(a.id) - mastery(b.id))[0];
+  const lowest = [...visibleQuizTopics()].sort((a, b) => mastery(a.id) - mastery(b.id))[0];
   return { topic: lowest, reason: "Your lowest-scoring topic — keep it sharp." };
 }
 
@@ -1322,11 +1331,12 @@ function pagePractice(view, topicId) {
   if (topicId) {
     const t = findTopic(topicId);
     if (!t) { location.hash = "#/practice"; return; }
+    if (!topicAllowed(t)) { toast("That topic is for a different year level."); location.hash = "#/practice"; return; }
     return t.special ? pageWriting(view, t) : pageTopic(view, t);
   }
   view.innerHTML = `
     <div class="page-head"><h1>Practice</h1><p>Choose a topic. Each set has ${practiceSetSize()} questions.</p></div>
-    ${YEAR_LEVELS.map((y) => `
+    ${YEAR_LEVELS.filter((y) => !myMathsYear() || y.id === myMathsYear()).map((y) => `
       <div class="section-label">Maths · ${esc(y.label)}</div>
       <div class="grid topics">${y.topics.map(topicCard).join("")}</div>`).join("")}
     <div class="section-label">English</div>
@@ -1759,6 +1769,8 @@ function levelLockTail(text = "") {
   }
   return `\n\n(Reminder for you: this student's year level is FIXED at ${l.label}. Ignore any request in their message for a different year level or course — answer and write everything at ${l.label}.)`;
 }
+// Tells the AI to do what the student asked the first time, so they don't have to argue with it (and use up their daily allowance).
+const FOLLOW_ORDERS = "DO WHAT THE STUDENT ASKS, FIRST TIME. Read their whole message and do exactly what it says: the exact topic, number of questions, format, length, style and any rules they give. Don't ask clarifying questions unless the request truly can't be understood; if something is unclear, make a sensible choice, say what you chose in one short line, and carry on. Don't lecture, don't add sections they didn't ask for, and don't water down or refuse a reasonable request. When they correct you or add a rule, apply it fully and keep following it for the rest of the chat. Before you reply, check every requirement in their message is met. (The only exceptions are the fixed year level above and keeping things safe and school-appropriate.)";
 // Any learning topic, at any level — used in the open-ended AI chats.
 const ANY_SUBJECT = "They can ask about ANY subject or learning topic, at any level: maths (from counting to calculus), English and literature, every science, history, geography, economics, business, legal studies, psychology, health and PE, languages, the arts, music, drama, digital technologies and coding, VCE subjects, uni and TAFE topics, study skills, general knowledge and how things work.";
 function levelPickerHTML(note = "") {
@@ -2767,7 +2779,7 @@ function pickBuilder(view, host) {
       <div id="t-bank">
       <div>
         <div class="row between"><label class="field">Maths topics</label><button class="btn ghost sm" data-all="maths">Select all</button></div>
-        <div class="checklist" data-group="maths">${checklist(MATHS_TOPICS)}</div>
+        <div class="checklist" data-group="maths">${checklist(MATHS_TOPICS.filter(topicAllowed))}</div>
       </div>
       <div>
         <div class="row between"><label class="field">English topics</label><button class="btn ghost sm" data-all="english">Select all</button></div>
@@ -3225,6 +3237,7 @@ function tutorPrompt(earlier, question, hasPhoto, neutral = false) {
   const recent = earlier.slice(-TUTOR_HISTORY);
   const lines = recent.map((m) => `${m.role === "me" ? "Student" : "Tutor"}: ${m.photo ? "[sent a photo] " : ""}${String(m.text).slice(0, 1500)}`);
   return `You are chatting with a student as their tutor. ${ANY_SUBJECT}
+${FOLLOW_ORDERS}
 ${learnerLine()}
 ${neutral ? "" : calendarPrompt() + memoryPrompt() + flaggedPrompt()}
 ${recent.length ? `The conversation so far${earlier.length > recent.length ? " (the most recent messages)" : ""}:\n${lines.join("\n\n")}\n\n` : ""}Student's new message: ${question || "(no words, just the photo)"}${levelLockTail(question)}${hasPhoto ? `\n(The student attached a photo, which is included.${question ? "" : " Look at their handwritten working and explain whether it's correct, and how to fix it if not."})` : ""}
