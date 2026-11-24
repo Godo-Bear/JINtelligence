@@ -5,8 +5,21 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const MODEL = 'gemini-3.5-flash';
-// If the main model is overloaded, out of quota or not found, the next one is tried so students still get an answer.
-const MODELS = [MODEL, 'gemini-2.5-flash'];
+
+// If the main model is overloaded, out of quota or not found, this asks Google which other "flash" models your key can use
+// and tries them, so students still get an answer (and no model name has to be guessed).
+async function findBackupModels(apiKey: string, not: string): Promise<string[]> {
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${apiKey}`);
+    const d = await r.json();
+    return (d?.models || [])
+      .filter((m: any) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m: any) => String(m.name || '').replace(/^models\//, ''))
+      .filter((n: string) => /^gemini-.*flash/.test(n) && !/(lite|image|tts|live|audio|embedding|exp|8b|thinking)/.test(n) && n !== not)
+      .sort().reverse()
+      .slice(0, 3);
+  } catch (_) { return []; }
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -84,8 +97,11 @@ Deno.serve(async (req) => {
     let lastStatus = 0;
     let firstError: any = null; // what went wrong with the main model, which is the useful thing to report
     let firstStatus = 0;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const model = MODELS[Math.min(attempt, MODELS.length - 1)];
+    let quotaError: any = null;
+    const queue: string[] = [MODEL, MODEL]; // the main model twice, then any back-ups Google lists for this key
+    let lookedForBackups = false;
+    for (let i = 0; i < queue.length && i < 6; i++) {
+      const model = queue[i];
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
@@ -95,23 +111,27 @@ Deno.serve(async (req) => {
       lastError = data;
       lastStatus = response.status;
       if (!firstError) { firstError = data; firstStatus = response.status; }
+      if (response.status === 429 && /quota|per ?day|billing/i.test(String(data?.error?.message || ''))) quotaError = data;
       // The real reason is in Supabase → Edge Functions → ask-tutor → Logs.
-      console.error(`Gemini API error (${model}, attempt ${attempt + 1}, HTTP ${response.status}):`, JSON.stringify(data));
-      if (response.status === 429 || response.status >= 500 || response.status === 404) {
-        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
-        continue; // try again, on the next model
+      console.error(`Gemini API error (${model}, try ${i + 1}, HTTP ${response.status}):`, JSON.stringify(data));
+      const retryable = response.status === 429 || response.status >= 500 || response.status === 404;
+      if (retryable && !lookedForBackups && i === queue.length - 1) {
+        lookedForBackups = true;
+        queue.push(...await findBackupModels(apiKey, MODEL));
       }
+      if (retryable) { await new Promise((r) => setTimeout(r, 600 * (i + 1))); continue; }
       break;
     }
 
     if (lastError) {
-      // Report the main model's problem, not a back-up model that has been retired (a 404).
-      if (firstStatus && !(firstStatus === 404 && lastStatus !== 404)) { lastStatus = firstStatus; lastError = firstError; }
+      // Report the real problem: a used-up quota first, otherwise the main model's error (not a back-up that doesn't exist).
+      if (quotaError) { lastStatus = 429; lastError = quotaError; }
+      else if (firstStatus && !(firstStatus === 404 && lastStatus !== 404)) { lastStatus = firstStatus; lastError = firstError; }
       const why = String(lastError?.error?.message || '').slice(0, 160);
       if (lastStatus === 401 || lastStatus === 403 || /api key/i.test(why)) return json({ error: `The AI key was rejected (HTTP ${lastStatus}). The site owner needs to check GEMINI_API_KEY. ${why}` }, 500);
       if (lastStatus === 404) return json({ error: `The AI model couldn't be found (HTTP 404). The site owner needs to check the model name. ${why}` }, 500);
-      if (lastStatus === 429) return json({ error: /quota|per ?day|billing/i.test(why) ? `AI_LIMIT_REACHED: the AI's limit for today has been reached. ${why}` : `The AI is busy right now (HTTP 429). ${why}` }, 500);
-      return json({ error: `The AI is having trouble right now (HTTP ${lastStatus}). ${why}` }, 500);
+      if (lastStatus === 429) return json({ error: quotaError ? `AI_LIMIT_REACHED: the AI's limit for today has been reached. ${why}` : `The AI is busy right now (HTTP 429). ${why}` }, 500);
+      return json({ error: `The AI is busy right now (HTTP ${lastStatus}), so please try again in a minute. ${why}` }, 500);
     }
 
     const candidate = data?.candidates?.[0];
