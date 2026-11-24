@@ -6,7 +6,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const MODEL = 'gemini-3.5-flash';
 // If the main model is overloaded, out of quota or not found, the next one is tried so students still get an answer.
-const MODELS = [MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash'];
+const MODELS = [MODEL, 'gemini-2.5-flash'];
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,6 +82,8 @@ Deno.serve(async (req) => {
     let data: any = null;
     let lastError: any = null;
     let lastStatus = 0;
+    let firstError: any = null; // what went wrong with the main model, which is the useful thing to report
+    let firstStatus = 0;
     for (let attempt = 0; attempt < 4; attempt++) {
       const model = MODELS[Math.min(attempt, MODELS.length - 1)];
       const response = await fetch(
@@ -92,6 +94,7 @@ Deno.serve(async (req) => {
       if (response.ok) { lastError = null; break; }
       lastError = data;
       lastStatus = response.status;
+      if (!firstError) { firstError = data; firstStatus = response.status; }
       // The real reason is in Supabase → Edge Functions → ask-tutor → Logs.
       console.error(`Gemini API error (${model}, attempt ${attempt + 1}, HTTP ${response.status}):`, JSON.stringify(data));
       if (response.status === 429 || response.status >= 500 || response.status === 404) {
@@ -102,6 +105,8 @@ Deno.serve(async (req) => {
     }
 
     if (lastError) {
+      // Report the main model's problem, not a back-up model that has been retired (a 404).
+      if (firstStatus && !(firstStatus === 404 && lastStatus !== 404)) { lastStatus = firstStatus; lastError = firstError; }
       const why = String(lastError?.error?.message || '').slice(0, 160);
       if (lastStatus === 401 || lastStatus === 403 || /api key/i.test(why)) return json({ error: `The AI key was rejected (HTTP ${lastStatus}). The site owner needs to check GEMINI_API_KEY. ${why}` }, 500);
       if (lastStatus === 404) return json({ error: `The AI model couldn't be found (HTTP 404). The site owner needs to check the model name. ${why}` }, 500);
