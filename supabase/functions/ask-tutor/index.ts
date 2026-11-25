@@ -114,6 +114,8 @@ Deno.serve(async (req) => {
       if (response.status === 429 && /quota|per ?day|billing/i.test(String(data?.error?.message || ''))) quotaError = data;
       // The real reason is in Supabase → Edge Functions → ask-tutor → Logs.
       console.error(`Gemini API error (${model}, try ${i + 1}, HTTP ${response.status}):`, JSON.stringify(data));
+      // A used-up quota belongs to the whole Google project, so every other model would refuse too: stop straight away.
+      if (quotaError) break;
       const retryable = response.status === 429 || response.status >= 500 || response.status === 404;
       if (retryable && !lookedForBackups && i === queue.length - 1) {
         lookedForBackups = true;
