@@ -399,8 +399,20 @@ async function bumpAiUsage(kind) {
 // The tutor's answer exactly as written (for replies that are JSON). If the AI is busy or the connection
 // drops, it tries again by itself (up to 3 tries in all); onRetry(n) lets the page say so.
 // Errors it throws have a .userMessage saying what went wrong.
+// One site-wide daily allowance for the AI (supabase/ai-site-cap.sql, set in Admin → AI usage). Admins aren't counted.
+// If the SQL hasn't been run, or the check fails for any reason, the request goes ahead.
+async function takeSiteAiCall() {
+  if (me?.isAdmin) return;
+  let allowed = true;
+  try { const { data, error } = await sb.rpc("ai_site_take"); if (!error && data === false) allowed = false; } catch (e) { /* carry on */ }
+  if (!allowed) {
+    const err = Object.assign(new Error("AI limit for today"), { aiDetail: "AI_LIMIT_REACHED" });
+    throw Object.assign(err, { userMessage: (await aiErrorInfo(err)).message });
+  }
+}
 async function askTutorRaw(body, { onRetry } = {}) {
   const payload = typeof body === "string" ? { question: body } : body;
+  await takeSiteAiCall();
   let failure;
   for (let attempt = 1; attempt <= AI_TRIES; attempt++) {
     try {
@@ -4159,6 +4171,9 @@ function pageAdmin(view) {
     </div>
     <div class="card"><div id="fb-list"><p class="muted">Loading…</p></div></div>
 
+    <div class="section-label">🤖 AI usage (whole site)</div>
+    <div class="card stack" id="ai-site-card"><p class="muted small" style="margin:0;">Loading…</p></div>
+
     <div class="section-label row between" style="margin-bottom:10px;">
       <span>🐛 Error logs</span><button class="btn ghost sm" id="errlog-clear">Clear all</button>
     </div>
@@ -4660,6 +4675,29 @@ function pageAdmin(view) {
     loadFeedback();
   });
   loadFeedback();
+
+  // ----- AI usage for the whole site (supabase/ai-site-cap.sql) -----
+  async function loadAiSite() {
+    const box = $("#ai-site-card", view);
+    const { data, error } = await sb.rpc("ai_site_status");
+    const row = Array.isArray(data) ? data[0] : data;
+    if (error || !row) { box.innerHTML = `<p class="muted small" style="margin:0;">Not set up yet. Run <b>supabase/ai-site-cap.sql</b> once to give the whole site a daily AI cap, which stops the free Google allowance running out early.</p>`; return; }
+    box.innerHTML = `
+      <div class="row between"><span>AI calls used today</span><strong>${row.used} / ${row.cap}</strong></div>
+      <div class="bar"><span style="width:${Math.min(100, row.cap ? Math.round((row.used / row.cap) * 100) : 100)}%"></span></div>
+      <p class="muted small" style="margin:0;">When the site reaches the cap, everyone sees "the AI's limit for today has been reached" (admins are exempt). It starts again at midnight Pacific time, which is when Google's free allowance resets. Saved answers don't use any.</p>
+      <div class="row"><button class="btn secondary sm" id="ai-cap-set">Change the daily cap…</button></div>`;
+    $("#ai-cap-set", box).addEventListener("click", async () => {
+      const n = askNumber(`How many AI calls should the whole site get per day? (now ${row.cap}). Pick a number a bit under Google's free allowance.`, row.cap);
+      if (n === null) return;
+      if (n < 0 || n > 100000) return alert("Enter a number from 0 to 100000.");
+      const { error: e2 } = await sb.from("ai_site_settings").update({ daily_cap: n }).eq("id", 1);
+      if (e2) return alert("Couldn't save the cap. Run supabase/ai-site-cap.sql first.");
+      toast(`Daily AI cap is now ${n}.`);
+      loadAiSite();
+    });
+  }
+  loadAiSite();
 
   // ----- Error logs (bugs reported automatically by students' browsers) -----
   async function loadErrorLogs() {
