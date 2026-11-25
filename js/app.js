@@ -232,7 +232,8 @@ async function aiErrorInfo(err) {
   if (status === 401) return { retry: false, message: "Your login has run out. Refresh the page (and log in again if it asks), then try again." };
   if (/too long/i.test(text)) return { retry: false, message: "That's too much for the AI in one go. Remove a file or ask for a bit less, then try again." };
   if (status === 504 || status === 546 || /timed? ?out|time limit|WORKER_LIMIT/i.test(text)) return { retry: false, message: "The AI took too long to answer. Try asking for fewer questions at once (like 5), then ask for more." };
-  if (/AI_LIMIT_REACHED/.test(text)) return { retry: false, message: `The AI's limit for today has been reached. ${aiResetText()} Please try again after that.` };
+  if (/AI_SITE_CAP/.test(text)) return { retry: false, message: `JINtelligence's AI allowance for today has been used up (the site owner's daily cap). ${aiResetText()}` };
+  if (/AI_LIMIT_REACHED/.test(text)) return { retry: false, message: `Google's free AI limit for today has been reached, so the AI can't answer right now. ${aiResetText()} Please try again after that.` };
   if (/AI key was rejected|model couldn't be found|HTTP 4(01|03|04)/i.test(text)) return { retry: false, message: "The AI isn't set up properly on the site right now. Please tell the site owner. (" + text.replace(/\s+/g, " ").trim().slice(0, 150) + ")" };
   if (status === 429 || /busy|overload|rate.?limit|quota|exhausted/i.test(text)) return { retry: true, message: "The AI is really busy right now (lots of people are using it). Wait about 30 seconds, then try again." };
   if (/stuck/i.test(text)) return { retry: true, message: "The AI got stuck on that one. Try asking in a different way, or for fewer questions at once." };
@@ -406,7 +407,7 @@ async function takeSiteAiCall() {
   let allowed = true;
   try { const { data, error } = await sb.rpc("ai_site_take"); if (!error && data === false) allowed = false; } catch (e) { /* carry on */ }
   if (!allowed) {
-    const err = Object.assign(new Error("AI limit for today"), { aiDetail: "AI_LIMIT_REACHED" });
+    const err = Object.assign(new Error("AI limit for today"), { aiDetail: "AI_SITE_CAP" });
     throw Object.assign(err, { userMessage: (await aiErrorInfo(err)).message });
   }
 }
@@ -3852,10 +3853,8 @@ function pageSettings(view) {
       ${feedbackPickerHTML()}
     </div>
 
-    ${me.isAdmin ? "" : `
     <div class="section-label">AI usage today</div>
     <div class="card stack" id="set-ai-usage"><p class="muted small" style="margin:0;">Loading…</p></div>
-    `}
 
     <div class="section-label">Appearance</div>
     <div class="card stack">
@@ -4047,7 +4046,10 @@ function pageSettings(view) {
   $("#set-fb-send", view).addEventListener("click", () => sendFeedback($("#set-fb-category", view), $("#set-fb-message", view), $("#set-fb-send", view), fbList));
   loadMyFeedback(fbList);
 
-  if (!me.isAdmin) {
+  if (me.isAdmin) {
+    const box = $("#set-ai-usage", view);
+    if (box) box.innerHTML = `<p class="small" style="margin:0;">As an admin you have <strong>no personal AI limit</strong> and aren't counted in the site's daily cap. If the AI still says it's reached its limit, that's Google's own free allowance running out, which the site can't override.</p>`;
+  } else {
     aiUsageToday().then((usage) => {
       const box = $("#set-ai-usage", view);
       if (!box) return;
