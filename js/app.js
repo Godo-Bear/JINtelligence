@@ -1407,6 +1407,7 @@ function pageTopic(view, t) {
         </div>
         <span class="muted small" id="pts-each"></span>
       </div>
+      ${scratchPadHTML()}
       <form id="qset" autocomplete="off"></form>
     </div>
     </div>${notesPanelHTML()}</div>
@@ -1450,6 +1451,7 @@ function pageTopic(view, t) {
     if (!$("#tab-practice", view).classList.contains("hidden")) $(FOCUS_SEL, form)?.focus({ preventScroll: true });
   }
 
+  wireScratchPad(view);
   $("#qset", view).addEventListener("submit", (e) => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -3118,6 +3120,7 @@ function runTest(view, items, minutes, opts = {}) {
       <div><h1 style="margin:0;">Test</h1><p id="answered"></p></div>
       <span class="timer" id="t-clock"></span>
     </div>
+    ${scratchPadHTML()}
     <form class="card" id="t-form" autocomplete="off">
       ${items.map(({ q, topic }, i) => questionHTML(q, i, topic.name, shown[i])).join("")}
       ${items.some(({ q }) => q.answerType === "written") ? `<div style="margin-top:18px;">${feedbackPickerHTML("Used when the AI marks your written answers.")}</div>` : ""}
@@ -3127,6 +3130,7 @@ function runTest(view, items, minutes, opts = {}) {
       </div>
     </form>`;
 
+  wireScratchPad(view);
   const form = $("#t-form", view);
   const drawAnswered = () => {
     const n = $$(ANSWER_SEL, form).filter((i) => i.value.trim()).length;
@@ -3301,8 +3305,10 @@ function pageTutor(view) {
             <button type="button" class="voice-btn voice-end" id="t-voice-stop" title="End voice chat" aria-label="End voice chat">✕</button>
           </div>
         </div>
+        <div class="tutor-pad hidden" id="t-pad-box">${scratchPadHTML({ ai: true, open: true })}</div>
         <form class="chat-form" id="chat-form" autocomplete="off">
           <button type="button" class="btn secondary" id="photo" title="Add a photo of your working">📷</button>
+          <button type="button" class="btn secondary" id="t-pad" title="Scratch pad: show your working and the AI can check it" aria-label="Scratch pad">✏️</button>
           <button type="button" class="btn secondary" id="t-voice" title="Voice chat — talk to the tutor" aria-label="Voice chat">🎙️</button>
           <input type="file" id="photo-input" accept="image/*" class="hidden">
           <textarea class="chat-input" rows="1" id="ask" placeholder="Ask a question…" maxlength="4000"></textarea>
@@ -3405,6 +3411,18 @@ function pageTutor(view) {
   });
   const clearImage = () => { pendingImage = null; $("#photo-input", view).value = ""; hide($("#attach", view)); };
   $("#attach-x", view).addEventListener("click", clearImage);
+
+  // ---- Scratch pad: draw your working, then send it to the AI as a picture (it's attached like a photo).
+  $("#t-pad", view).addEventListener("click", () => $("#t-pad-box", view).classList.toggle("hidden"));
+  wireScratchPad($("#t-pad-box", view), { onSend: (dataUrl) => {
+    pendingImage = { base64: dataUrl, mimeType: "image/png" };
+    $("#attach img", view).src = dataUrl;
+    show($("#attach", view));
+    const ask = $("#ask", view);
+    if (!ask.value.trim()) ask.value = "Can you check my working?";
+    ask.focus();
+    toast("Your working is attached. Press Ask to send it to the AI.");
+  } });
 
   // ---- Voice chat: listen → send → read the reply aloud → listen again, until Stop.
   const vbar = $("#t-voice-bar", view), orb = $("#t-voice-orb", view);

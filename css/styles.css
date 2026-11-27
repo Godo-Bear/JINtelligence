@@ -1561,3 +1561,15 @@ html.admin-only main { max-width: 1100px; margin: 0 auto; width: 100%; padding-b
 #trial-bar { position: sticky; top: 0; z-index: 30; text-align: center; padding: 7px 12px; font-size: 14px; background: #fff4d6; color: #5a4300; border-bottom: 1px solid #f0d98a; }
 #trial-bar a { color: inherit; font-weight: 700; }
 .trial-card { border-style: dashed; }
+
+/* Scratch pad */
+.scratch { border: 1px solid var(--border, #ddd); border-radius: 12px; padding: 10px 12px; margin: 0 0 14px; }
+.scratch > summary { cursor: pointer; font-weight: 600; }
+.scratch-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; }
+.scratch .sp-colour { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; padding: 0; cursor: pointer; }
+.scratch .sp-colour.on { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+.scratch .sp-size { min-width: 30px; height: 28px; border-radius: 8px; border: 1px solid var(--border, #ccc); background: transparent; color: inherit; cursor: pointer; font-weight: 700; }
+.scratch .sp-size.on, .scratch [data-sp-eraser].on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.scratch .sp-sep { width: 1px; height: 22px; background: var(--border, #ccc); margin: 0 4px; }
+.scratch-canvas { width: 100%; height: auto; aspect-ratio: 1000 / 560; background: #fff; border-radius: 10px; border: 1px solid var(--border, #ccc); touch-action: none; cursor: crosshair; display: block; }
+.tutor-pad { padding: 0 12px; }
