@@ -3266,7 +3266,8 @@ ${tutorVoice ? "\nVOICE CHAT: The student is TALKING to you and your reply will 
 Answer the student's new message, carrying on naturally from the conversation — they may refer back to earlier messages (like "the second one" or "explain that again"). In the reply write plain text with no Markdown or LaTeX, use × and ÷, and keep it fairly short unless they ask for more detail.
 
 Reply with ONLY valid JSON, no markdown:
-{"reply":"your answer to the student","title":"a 2–5 word title for this chat","remember":[],"forget":[],"calendar":[]}
+{"reply":"your answer to the student","title":"a 2–5 word title for this chat","diagram":"","remember":[],"forget":[],"calendar":[]}
+${DIAGRAM_RULES}
 ${memoryRules()}
 ${calendarRules()}`;
 }
@@ -3326,14 +3327,14 @@ function pageTutor(view) {
     $("#t-title", view).textContent = current.title;
     if (!current.messages.length) {
       const flagged = flaggedForAI().length;
-      const examples = [...(flagged ? [`Help me with my ${flagged} flagged question${flagged === 1 ? "" : "s"}`] : []), "How do I simplify 12/18?", "Explain photosynthesis simply", "Help me with VCE derivatives", "How do loops work in Python?"].slice(0, flagged ? 4 : 4);
+      const examples = [...(flagged ? [`Help me with my ${flagged} flagged question${flagged === 1 ? "" : "s"}`] : []), "How do I simplify 12/18?", "Explain photosynthesis simply", "Draw a diagram of the water cycle", "Help me with VCE derivatives", "How do loops work in Python?"].slice(0, flagged ? 4 : 4);
       const welcome = aiMemory?.enabled && aiMemory.items.length ? "Welcome back! What would you like help with today?" : "What would you like help with?";
       chatBox.innerHTML = `<div class="chat-empty">${welcome}
         <div class="chips">${examples.map((x) => `<button type="button" class="btn secondary sm">${esc(x)}</button>`).join("")}</div></div>`;
       $$(".chips button", chatBox).forEach((b) => b.addEventListener("click", () => { $("#ask", view).value = b.textContent; $("#chat-form", view).requestSubmit(); }));
       return;
     }
-    chatBox.innerHTML = current.messages.map((m, i) => `<div class="bubble ${m.role}${m.pending ? " pending" : ""}">${m.image ? `<img src="${m.image}" alt="Your photo">` : m.photo ? `<span class="bubble-photo">📷 Photo</span>` : ""}${m.files?.length ? `<span class="bubble-photo">📎 ${esc(m.files.join(", "))}</span>` : ""}${esc(m.text)}${m.note ? `<div class="bubble-note">${esc(m.note)}</div>` : ""}${m.role === "bot" && !m.pending ? `<button type="button" class="btn ghost sm bubble-pdf" data-pdf-msg="${i}" title="Save this answer as a PDF">📄 PDF</button>` : ""}</div>`).join("");
+    chatBox.innerHTML = current.messages.map((m, i) => `<div class="bubble ${m.role}${m.pending ? " pending" : ""}">${m.image ? `<img src="${m.image}" alt="Your photo">` : m.photo ? `<span class="bubble-photo">📷 Photo</span>` : ""}${m.files?.length ? `<span class="bubble-photo">📎 ${esc(m.files.join(", "))}</span>` : ""}${esc(m.text)}${m.diagram ? `<div class="bubble-diagram">${m.diagram}</div>` : ""}${m.note ? `<div class="bubble-note">${esc(m.note)}</div>` : ""}${m.role === "bot" && !m.pending ? `<button type="button" class="btn ghost sm bubble-pdf" data-pdf-msg="${i}" title="Save this answer as a PDF">📄 PDF</button>` : ""}</div>`).join("");
     chatBox.scrollTop = chatBox.scrollHeight;
   };
   const drawList = () => {
@@ -3384,7 +3385,7 @@ function pageTutor(view) {
   $("#t-pdf", view).addEventListener("click", () => {
     const real = current?.messages.filter((m) => !m.pending) || [];
     if (!real.length) return toast("Nothing in this chat yet.");
-    const body = real.map((m) => `<div class="pd-turn pd-${m.role}"><b>${m.role === "me" ? "You" : "Tutor"}:</b> ${esc(m.text || "").replace(/\n/g, "<br>")}</div>`).join("");
+    const body = real.map((m) => `<div class="pd-turn pd-${m.role}"><b>${m.role === "me" ? "You" : "Tutor"}:</b> ${esc(m.text || "").replace(/\n/g, "<br>")}${m.diagram ? `<div style="max-width:520px">${m.diagram}</div>` : ""}</div>`).join("");
     printDoc(current.title, body);
   });
   chatBox.addEventListener("click", (e) => {
@@ -3392,7 +3393,7 @@ function pageTutor(view) {
     if (!btn) return;
     const m = current?.messages[+btn.dataset.pdfMsg];
     if (!m?.text?.trim()) return toast("Nothing to save yet.");
-    printDoc(current.title, textToParagraphsHTML(m.text));
+    printDoc(current.title, textToParagraphsHTML(m.text) + (m.diagram ? `<div style="max-width:520px">${m.diagram}</div>` : ""));
   });
 
   $("#photo", view).addEventListener("click", () => $("#photo-input", view).click());
@@ -3495,7 +3496,7 @@ function pageTutor(view) {
     const files = uploadsReady(tutorFiles);
     if (!current || busy || (!question && !pendingImage && !files.length)) return;
     if (tutorFiles.some((f) => f.status === "reading")) return toast("Your files are still loading — wait a moment, then send again.");
-    const cacheKey = question && !pendingImage && !files.length && !tutorVoice && !current.messages.some((m) => !m.pending && m.role !== "err") ? tutorCacheKey(question) : null;
+    const cacheKey = question && !asksForDiagram(question) && !pendingImage && !files.length && !tutorVoice && !current.messages.some((m) => !m.pending && m.role !== "err") ? tutorCacheKey(question) : null;
     const saved = await cachedTutorAnswer(cacheKey); // a saved answer costs nothing, so it doesn't count against the daily limit
     if (!saved && !(await checkAiLimit("tutor"))) return;
     const image = pendingImage, chat = current; // the student may switch chats while the tutor is thinking
@@ -3527,10 +3528,12 @@ function pageTutor(view) {
       const data = parseLooseJSON(raw);
       const obj = data && !Array.isArray(data) ? data : {};
       pending.text = cleanTutorAnswer(aiReplyText(raw, data)) || "Sorry, I couldn't come up with an answer. Try asking another way.";
+      const svg = sanitizeSVG(obj.diagram);
+      if (svg) pending.diagram = svg;
       if (chat.title === "New chat") chat.title = plainText(obj.title || "").slice(0, 50) || (question || "Checking my working").slice(0, 50);
       const note = [memoryNote(applyMemoryUpdates(obj)), calendarNote(addEventsFromAI(obj.calendar))].filter(Boolean).join(" · ");
       if (note) pending.note = note;
-      if (cacheKey && pending.text && !/couldn't come up with/i.test(pending.text)) saveTutorAnswer(cacheKey, pending.text);
+      if (cacheKey && pending.text && !pending.diagram && !/couldn't come up with/i.test(pending.text)) saveTutorAnswer(cacheKey, pending.text);
     } catch (err) {
       if (err.fromCache) { /* answered from a saved answer */ } else {
       console.error(err);
